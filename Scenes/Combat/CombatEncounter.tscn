@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://l7tuxlqlubtf"]
+
+[ext_resource type="Script" uid="uid://bghxnh8ldqe1n" path="res://Scripts/Combat/CombatEncounter.cs" id="1_08ja0"]
+
+[node name="CombatEncounter" type="Node3D" unique_id=1734220970]
+script = ExtResource("1_08ja0")

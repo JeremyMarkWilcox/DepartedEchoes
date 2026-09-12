@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://t48gn1hsfpdf"]
+
+[ext_resource type="Script" uid="uid://b22d2pi42dsxe" path="res://Scripts/Characters/Player/Player.cs" id="1_no7dv"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_ra2i3"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_ra2i3"]
+
+[node name="Player" type="CharacterBody3D" unique_id=2028128879]
+script = ExtResource("1_no7dv")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1973738798]
+shape = SubResource("CapsuleShape3D_ra2i3")
+
+[node name="MeshHolder" type="Node3D" parent="." unique_id=577412615]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="MeshHolder" unique_id=1245895531]
+mesh = SubResource("CapsuleMesh_ra2i3")
+
+[node name="SpringArmAnchor" type="Marker3D" parent="." unique_id=2134499473]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35681367, 0)

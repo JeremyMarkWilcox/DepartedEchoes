@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://o2dykulbtxng"]
+
+[ext_resource type="Script" uid="uid://bwplapsejhu6f" path="res://Scripts/Characters/Spirit/SpiritBase.cs" id="1_owoix"]
+
+[node name="SpiritBase" type="CharacterBody3D" unique_id=934341465]
+script = ExtResource("1_owoix")

@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://c7ghqtvdrlyy6"]
+
+[ext_resource type="Script" uid="uid://dpi0grrjvlach" path="res://Scripts/Camera/CameraRig.cs" id="1_co4bg"]
+
+[node name="CameraRig" type="Node3D" unique_id=178904908 node_paths=PackedStringArray("_yawPivot", "_pitchPivot")]
+script = ExtResource("1_co4bg")
+_yawPivot = NodePath("YawPivot")
+_pitchPivot = NodePath("YawPivot/PitchPivot")
+
+[node name="YawPivot" type="Node3D" parent="." unique_id=57887298]
+
+[node name="PitchPivot" type="Node3D" parent="YawPivot" unique_id=846286953]
+
+[node name="SpringArm3D" type="SpringArm3D" parent="YawPivot/PitchPivot" unique_id=868269359]
+spring_length = 5.0
+
+[node name="Camera3D" type="Camera3D" parent="YawPivot/PitchPivot/SpringArm3D" unique_id=1982476815]
+current = true
