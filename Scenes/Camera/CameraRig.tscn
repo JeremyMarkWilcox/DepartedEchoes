@@ -2,10 +2,12 @@
 
 [ext_resource type="Script" uid="uid://dpi0grrjvlach" path="res://Scripts/Camera/CameraRig.cs" id="1_co4bg"]
 
-[node name="CameraRig" type="Node3D" unique_id=178904908 node_paths=PackedStringArray("_yawPivot", "_pitchPivot")]
+[node name="CameraRig" type="Node3D" unique_id=178904908 node_paths=PackedStringArray("_yawPivot", "_pitchPivot", "_springArm", "_camera")]
 script = ExtResource("1_co4bg")
 _yawPivot = NodePath("YawPivot")
 _pitchPivot = NodePath("YawPivot/PitchPivot")
+_springArm = NodePath("YawPivot/PitchPivot/SpringArm3D")
+_camera = NodePath("YawPivot/PitchPivot/SpringArm3D/Camera3D")
 
 [node name="YawPivot" type="Node3D" parent="." unique_id=57887298]
 

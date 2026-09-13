@@ -4,8 +4,10 @@
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_ra2i3"]
 
-[node name="CombatEncounter" type="Node3D" unique_id=1734220970]
+[node name="CombatEncounter" type="Node3D" unique_id=1734220970 node_paths=PackedStringArray("_combatBoundary", "_combatCenter")]
 script = ExtResource("1_08ja0")
+_combatBoundary = NodePath("CombatBoundary")
+_combatCenter = NodePath("CombatCenter")
 
 [node name="CombatBoundary" type="Area3D" parent="." unique_id=2002948110]
 

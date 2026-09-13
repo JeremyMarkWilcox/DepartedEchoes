@@ -8,8 +8,13 @@
 [ext_resource type="PackedScene" uid="uid://l7tuxlqlubtf" path="res://Scenes/Combat/CombatEncounter.tscn" id="6_m1o7v"]
 [ext_resource type="PackedScene" uid="uid://gjkam268r7db" path="res://Scenes/Ui/Game Hud/GameHUD.tscn" id="7_3586x"]
 
-[node name="Game" type="Node3D" unique_id=440377025]
+[node name="Game" type="Node3D" unique_id=440377025 node_paths=PackedStringArray("_player", "_cameraRig", "_playerSpawn", "_gameHud", "_combatEncounter")]
 script = ExtResource("1_rdw05")
+_player = NodePath("ActorContainer/Player")
+_cameraRig = NodePath("CameraRig")
+_playerSpawn = NodePath("LevelContainer/PrototypeLevel/PlayerStart")
+_gameHud = NodePath("GameHud")
+_combatEncounter = NodePath("CombatEncounter")
 
 [node name="LevelContainer" type="Node3D" parent="." unique_id=1609627590]
 
@@ -18,12 +23,15 @@ script = ExtResource("1_rdw05")
 [node name="ActorContainer" type="Node3D" parent="." unique_id=523048330]
 
 [node name="Player" parent="ActorContainer" unique_id=2028128879 instance=ExtResource("2_xbxml")]
+motion_mode = 1
 
 [node name="AllySpirit" parent="ActorContainer" unique_id=934341465 instance=ExtResource("3_ln2h6")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14.762014, 0, 0)
 
 [node name="CameraRig" parent="." unique_id=178904908 instance=ExtResource("5_gvja8")]
 
-[node name="CombatEncounter" parent="." unique_id=1734220970 instance=ExtResource("6_m1o7v")]
+[node name="CombatEncounter" parent="." unique_id=1734220970 node_paths=PackedStringArray("_cameraRig", "_player") instance=ExtResource("6_m1o7v")]
+_cameraRig = NodePath("../CameraRig")
+_player = NodePath("../ActorContainer/Player")
 
 [node name="GameHud" parent="." unique_id=806819728 instance=ExtResource("7_3586x")]
