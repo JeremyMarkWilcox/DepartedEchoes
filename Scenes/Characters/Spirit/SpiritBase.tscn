@@ -2,5 +2,31 @@
 
 [ext_resource type="Script" uid="uid://bwplapsejhu6f" path="res://Scripts/Characters/Spirit/SpiritBase.cs" id="1_owoix"]
 
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_ra2i3"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_g4gaj"]
+lightmap_size_hint = Vector2i(17, 14)
+rings = 0
+
+[sub_resource type="Skin" id="Skin_otjlk"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_g4gaj"]
+
 [node name="SpiritBase" type="CharacterBody3D" unique_id=934341465]
 script = ExtResource("1_owoix")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2096964417]
+shape = SubResource("CapsuleShape3D_ra2i3")
+
+[node name="Visuals" type="Node3D" parent="." unique_id=1706617715]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Visuals" unique_id=1207237107]
+mesh = SubResource("CapsuleMesh_g4gaj")
+skin = SubResource("Skin_otjlk")
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=1366018458]
+
+[node name="Hurtbox" type="Area3D" parent="." unique_id=462938795]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Hurtbox" unique_id=1277251684]
+shape = SubResource("CapsuleShape3D_g4gaj")

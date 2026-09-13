@@ -18,4 +18,4 @@ shape = SubResource("CapsuleShape3D_ra2i3")
 mesh = SubResource("CapsuleMesh_ra2i3")
 
 [node name="SpringArmAnchor" type="Marker3D" parent="." unique_id=2134499473]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35681367, 0)
+transform = Transform3D(1, 0, 0, 0, 0.99999994, 0, 0, 0, 0.99999994, 0, 1, 0)

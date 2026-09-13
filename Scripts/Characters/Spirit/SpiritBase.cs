@@ -1,6 +1,6 @@
 using Godot;
 using System;
 
-public partial class SpiritBase : CharacterBody3D
+public partial class SpiritBase : ActorBase
 {
 }

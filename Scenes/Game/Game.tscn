@@ -1,6 +1,29 @@
 [gd_scene format=3 uid="uid://b2i0hd40qdqov"]
 
 [ext_resource type="Script" uid="uid://kkaml42l40ls" path="res://Scripts/Game/Game.cs" id="1_rdw05"]
+[ext_resource type="PackedScene" uid="uid://c6o7q5wlvco23" path="res://Scenes/Levels/PrototypeLevel.tscn" id="2_1q8bt"]
+[ext_resource type="PackedScene" uid="uid://t48gn1hsfpdf" path="res://Scenes/Characters/Player/Player.tscn" id="2_xbxml"]
+[ext_resource type="PackedScene" uid="uid://o2dykulbtxng" path="res://Scenes/Characters/Spirit/SpiritBase.tscn" id="3_ln2h6"]
+[ext_resource type="PackedScene" uid="uid://c7ghqtvdrlyy6" path="res://Scenes/Camera/CameraRig.tscn" id="5_gvja8"]
+[ext_resource type="PackedScene" uid="uid://l7tuxlqlubtf" path="res://Scenes/Combat/CombatEncounter.tscn" id="6_m1o7v"]
+[ext_resource type="PackedScene" uid="uid://gjkam268r7db" path="res://Scenes/Ui/Game Hud/GameHUD.tscn" id="7_3586x"]
 
 [node name="Game" type="Node3D" unique_id=440377025]
 script = ExtResource("1_rdw05")
+
+[node name="LevelContainer" type="Node3D" parent="." unique_id=1609627590]
+
+[node name="PrototypeLevel" parent="LevelContainer" unique_id=1431255158 instance=ExtResource("2_1q8bt")]
+
+[node name="ActorContainer" type="Node3D" parent="." unique_id=523048330]
+
+[node name="Player" parent="ActorContainer" unique_id=2028128879 instance=ExtResource("2_xbxml")]
+
+[node name="AllySpirit" parent="ActorContainer" unique_id=934341465 instance=ExtResource("3_ln2h6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14.762014, 0, 0)
+
+[node name="CameraRig" parent="." unique_id=178904908 instance=ExtResource("5_gvja8")]
+
+[node name="CombatEncounter" parent="." unique_id=1734220970 instance=ExtResource("6_m1o7v")]
+
+[node name="GameHud" parent="." unique_id=806819728 instance=ExtResource("7_3586x")]
