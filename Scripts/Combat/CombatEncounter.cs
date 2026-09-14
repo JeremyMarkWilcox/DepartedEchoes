@@ -87,7 +87,8 @@ public partial class CombatEncounter : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (!@event.IsActionPressed(DebugEndEncounterAction))
+        // allowEcho: false so holding the key repeats into nothing - one press acts once.
+        if (!@event.IsActionPressed(DebugEndEncounterAction, allowEcho: false))
         {
             return;
         }
