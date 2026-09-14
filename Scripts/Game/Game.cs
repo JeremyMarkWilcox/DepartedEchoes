@@ -5,19 +5,19 @@ public partial class Game : Node3D
     [Export] private Player _player = null!;
     [Export] private CameraRig _cameraRig = null!;
     [Export] private Marker3D _playerSpawn = null!;
+    [Export] private SpiritBase _allySpirit = null!;
+    [Export] private Marker3D _allySpiritStart = null!;
+    [Export] private EnemyBase _enemySpirit = null!;
+    [Export] private Marker3D _enemySpiritStart = null!;
     [Export] private GameHud _gameHud = null!;
     [Export] private CombatEncounter _combatEncounter = null!;
 
     public override void _Ready()
     {
-        PlacePlayerAtSpawn();
+        PlaceActorAtSpawn(_player, _playerSpawn, "Player");
+        PlaceActorAtSpawn(_allySpirit, _allySpiritStart, "AllySpirit");
+        PlaceActorAtSpawn(_enemySpirit, _enemySpiritStart, "EnemySpirit");
         ConnectCameraAndPlayer();
-
-        // Combat is out of scope for the exploration prototype.
-        if (_combatEncounter != null)
-        {
-            _combatEncounter.ProcessMode = ProcessModeEnum.Disabled;
-        }
 
         _gameHud?.SetStateText("Exploration");
         _gameHud?.SetReadyVisible(false);
@@ -25,36 +25,25 @@ public partial class Game : Node3D
         Input.MouseMode = Input.MouseModeEnum.Captured;
     }
 
-    public override void _UnhandledInput(InputEvent @event)
+    /// <summary>
+    /// Game owns actor placement: the spawn marker drives both position and facing.
+    /// </summary>
+    private static void PlaceActorAtSpawn(ActorBase actor, Marker3D spawn, string actorName)
     {
-        if (!@event.IsActionPressed("ui_cancel"))
+        if (actor == null)
         {
+            GD.PushError($"Game: {actorName} is not assigned.");
             return;
         }
 
-        Input.MouseMode = Input.MouseMode == Input.MouseModeEnum.Captured
-            ? Input.MouseModeEnum.Visible
-            : Input.MouseModeEnum.Captured;
-
-        GetViewport().SetInputAsHandled();
-    }
-
-    private void PlacePlayerAtSpawn()
-    {
-        if (_player == null)
+        if (spawn == null)
         {
-            GD.PushError("Game: _player is not assigned.");
+            GD.PushWarning($"Game: {actorName} spawn marker is not assigned; leaving it at its authored position.");
             return;
         }
 
-        if (_playerSpawn == null)
-        {
-            GD.PushWarning("Game: _playerSpawn is not assigned; leaving Player at its authored position.");
-            return;
-        }
-
-        _player.GlobalTransform = _playerSpawn.GlobalTransform;
-        _player.Velocity = Vector3.Zero;
+        actor.GlobalTransform = spawn.GlobalTransform;
+        actor.Velocity = Vector3.Zero;
     }
 
     private void ConnectCameraAndPlayer()

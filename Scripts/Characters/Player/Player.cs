@@ -16,6 +16,7 @@ public partial class Player : ActorBase
 
     private Node3D _cameraReference;
     private float _gravity = 9.8f;
+    private bool _isMovementEnabled = true;
 
     public override void _Ready()
     {
@@ -33,6 +34,20 @@ public partial class Player : ActorBase
     public void SetCameraReference(Node3D cameraReference)
     {
         _cameraReference = cameraReference;
+    }
+
+    /// <summary>
+    /// Holds or releases exploration movement. Gravity and grounding keep running while held,
+    /// so the Player stays settled instead of drifting.
+    /// </summary>
+    public void SetMovementEnabled(bool isEnabled)
+    {
+        _isMovementEnabled = isEnabled;
+
+        if (!isEnabled)
+        {
+            Velocity = new Vector3(0.0f, Velocity.Y, 0.0f);
+        }
     }
 
     public override void _PhysicsProcess(double delta)
@@ -67,6 +82,11 @@ public partial class Player : ActorBase
 
     private Vector3 GetMoveDirection()
     {
+        if (!_isMovementEnabled)
+        {
+            return Vector3.Zero;
+        }
+
         Vector2 input = Input.GetVector("move_left", "move_right", "move_forward", "move_back");
         if (input == Vector2.Zero)
         {
