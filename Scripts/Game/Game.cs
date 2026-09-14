@@ -26,6 +26,28 @@ public partial class Game : Node3D
     }
 
     /// <summary>
+    /// Game owns mouse capture, since it is a whole-session concern rather than a camera or
+    /// encounter one. Escape releases the cursor, a left click recaptures it. Neither is bound
+    /// to a gameplay or encounter action, so freeing the mouse cannot trigger an encounter.
+    /// </summary>
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event.IsActionPressed("ui_cancel") && Input.MouseMode == Input.MouseModeEnum.Captured)
+        {
+            Input.MouseMode = Input.MouseModeEnum.Visible;
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        if (Input.MouseMode != Input.MouseModeEnum.Captured
+            && @event is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
+        {
+            Input.MouseMode = Input.MouseModeEnum.Captured;
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
+    /// <summary>
     /// Game owns actor placement: the spawn marker drives both position and facing.
     /// </summary>
     private static void PlaceActorAtSpawn(ActorBase actor, Marker3D spawn, string actorName)
@@ -57,5 +79,10 @@ public partial class Game : Node3D
         Node3D anchor = _player.CameraAnchor ?? _player;
         _cameraRig.SetTarget(anchor, _player);
         _player.SetCameraReference(_cameraRig.YawPivot);
+
+        // The encounter view sweeps over the spirits to frame them; without this the spring arm
+        // can catch on their bodies and pull the camera in part-way through the blend.
+        _cameraRig.AddExcludedBody(_allySpirit);
+        _cameraRig.AddExcludedBody(_enemySpirit);
     }
 }
