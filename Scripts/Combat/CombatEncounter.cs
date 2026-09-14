@@ -1,3 +1,4 @@
+using System;
 using Godot;
 
 public partial class CombatEncounter : Node3D
@@ -12,6 +13,9 @@ public partial class CombatEncounter : Node3D
         Ready,
         Combat,
 
+        /// <summary>Someone has fallen: both combatants are stopped and the result is on screen.</summary>
+        Resolving,
+
         /// <summary>Blending back to the exploration view. Movement stays held until it lands.</summary>
         Returning,
     }
@@ -23,11 +27,32 @@ public partial class CombatEncounter : Node3D
     [Export] private Area3D _battleTrigger = null!;
     [Export] private GameHud _gameHud = null!;
 
+    /// <summary>The two explicit opponents. A one-versus-one prototype needs no faction lookup.</summary>
+    [Export] private CombatantBase _allySpirit = null!;
+
+    [Export] private CombatantBase _enemySpirit = null!;
+
     /// <summary>How long the Ready banner is held before Combat begins.</summary>
     [Export(PropertyHint.Range, "0.1,5,0.1")] private float _readyDurationSeconds = 1.5f;
 
+    /// <summary>How long the result is shown before the return to exploration starts.</summary>
+    [Export(PropertyHint.Range, "0.2,5,0.1")] private float _resultDurationSeconds = 1.6f;
+
     /// <summary>Current encounter phase. Exploration means a new encounter may be triggered.</summary>
     public EncounterState State { get; private set; } = EncounterState.Exploration;
+
+    /// <summary>
+    /// Raised once exploration has been restored and combat runtime state has been cleared, so
+    /// Game can put the combatants back on their authored markers. Encounter owns the timing;
+    /// placement stays Game's responsibility.
+    /// </summary>
+    public event Action EncounterReset;
+
+    /// <summary>
+    /// Counts down the result display. A plain field rather than a scene timer, so cancelling is
+    /// just clearing it - no callback can survive to fire into a later encounter.
+    /// </summary>
+    private float _resultCountdown;
 
     /// <summary>
     /// Bumped whenever an encounter starts or ends. Deferred callbacks capture the value they
@@ -63,6 +88,12 @@ public partial class CombatEncounter : Node3D
         {
             GD.PushWarning("CombatEncounter: _cameraRig is not assigned; encounters run without a camera blend.");
         }
+
+        SubscribeToCombatant(_allySpirit);
+        SubscribeToCombatant(_enemySpirit);
+
+        _gameHud?.SetCombatHudVisible(false);
+        _gameHud?.HideResult();
     }
 
     public override void _ExitTree()
@@ -71,6 +102,51 @@ public partial class CombatEncounter : Node3D
         {
             _cameraRig.BlendCompleted -= OnCameraBlendCompleted;
         }
+
+        UnsubscribeFromCombatant(_allySpirit);
+        UnsubscribeFromCombatant(_enemySpirit);
+    }
+
+    private void SubscribeToCombatant(CombatantBase combatant)
+    {
+        if (combatant == null)
+        {
+            GD.PushWarning("CombatEncounter: a combatant is not assigned; the fight will not run.");
+            return;
+        }
+
+        combatant.Defeated += OnCombatantDefeated;
+        combatant.HealthChanged += OnCombatantHealthChanged;
+    }
+
+    private void UnsubscribeFromCombatant(CombatantBase combatant)
+    {
+        if (combatant == null)
+        {
+            return;
+        }
+
+        combatant.Defeated -= OnCombatantDefeated;
+        combatant.HealthChanged -= OnCombatantHealthChanged;
+    }
+
+    /// <summary>Runs down the result display, then hands off to the existing return path.</summary>
+    public override void _Process(double delta)
+    {
+        if (State != EncounterState.Resolving || _resultCountdown <= 0.0f)
+        {
+            return;
+        }
+
+        _resultCountdown -= (float)delta;
+
+        if (_resultCountdown > 0.0f)
+        {
+            return;
+        }
+
+        _resultCountdown = 0.0f;
+        EndEncounter();
     }
 
     public override void _PhysicsProcess(double delta)
@@ -127,7 +203,14 @@ public partial class CombatEncounter : Node3D
 
         // Gravity and grounding keep running while movement is held.
         SetPlayerMovementEnabled(false);
+
+        // Participants are armed with their opponent and clean runtime state, but StartCombat is
+        // withheld until Combat, so nothing moves or swings during Setup or Ready.
+        ResetCombatants();
+
         _gameHud?.SetReadyVisible(false);
+        _gameHud?.HideResult();
+        _gameHud?.SetCombatHudVisible(true);
         _gameHud?.SetStateText("Setup - framing encounter");
 
         _pendingBlendToken = _cameraRig?.BlendToEncounterView(_combatCenter) ?? CameraRig.InvalidBlendToken;
@@ -184,6 +267,67 @@ public partial class CombatEncounter : Node3D
 
         // The Player must be able to move and dodge during combat.
         SetPlayerMovementEnabled(true);
+
+        // Only now may the combatants approach and attack.
+        _allySpirit?.StartCombat();
+        _enemySpirit?.StartCombat();
+    }
+
+    /// <summary>
+    /// Settles the fight exactly once.
+    ///
+    /// The rule for simultaneous defeat is simply first past the post: whoever reaches zero first
+    /// is the loser, and the outcome is attributed to that combatant. Two cannot genuinely fall on
+    /// the same frame, because this handler stops both sides before returning, which clears the
+    /// other's active flag and drops the swing it had winding up. Even so, a later notification is
+    /// dropped by the state guard, so the reported result can never be overwritten.
+    /// </summary>
+    private void OnCombatantDefeated(CombatantBase combatant)
+    {
+        if (State != EncounterState.Combat)
+        {
+            return;
+        }
+
+        StopCombatants();
+        State = EncounterState.Resolving;
+
+        // Attributed to the combatant that actually fell, rather than inferred from both flags.
+        bool enemyFell = combatant == _enemySpirit;
+
+        _gameHud?.SetStateText("Resolving");
+        _gameHud?.ShowResult(enemyFell ? "Enemy defeated" : "Ally defeated");
+
+        _resultCountdown = _resultDurationSeconds;
+    }
+
+    private void OnCombatantHealthChanged(CombatantBase combatant)
+    {
+        if (combatant == _allySpirit)
+        {
+            _gameHud?.SetAllyHealth(combatant.Health, combatant.MaxHealth);
+        }
+        else if (combatant == _enemySpirit)
+        {
+            _gameHud?.SetEnemyHealth(combatant.Health, combatant.MaxHealth);
+        }
+    }
+
+    /// <summary>Clears runtime combat state on both sides and re-arms their opponents.</summary>
+    private void ResetCombatants()
+    {
+        _allySpirit?.ResetForEncounter(_enemySpirit);
+        _enemySpirit?.ResetForEncounter(_allySpirit);
+    }
+
+    /// <summary>
+    /// The single stop path: defeat, the debug exit and any other cancellation all come through
+    /// here, dropping movement and any attack still winding up.
+    /// </summary>
+    private void StopCombatants()
+    {
+        _allySpirit?.StopCombat();
+        _enemySpirit?.StopCombat();
     }
 
     /// <summary>
@@ -198,13 +342,18 @@ public partial class CombatEncounter : Node3D
             return;
         }
 
-        // Retire the Ready timer and the encounter blend callback before starting the return.
+        // Retire the Ready timer, the blend callback and the result countdown before returning.
         _encounterGeneration++;
         _pendingBlendToken = CameraRig.InvalidBlendToken;
+        _resultCountdown = 0.0f;
+
+        // Safe from Setup, Ready, an attack windup or the result display alike.
+        StopCombatants();
 
         State = EncounterState.Returning;
         SetPlayerMovementEnabled(false);
         _gameHud?.SetReadyVisible(false);
+        _gameHud?.HideResult();
         _gameHud?.SetStateText("Returning to exploration");
 
         _pendingBlendToken = _cameraRig?.BlendToExplorationView() ?? CameraRig.InvalidBlendToken;
@@ -224,10 +373,18 @@ public partial class CombatEncounter : Node3D
     {
         State = EncounterState.Exploration;
         _pendingBlendToken = CameraRig.InvalidBlendToken;
+        _resultCountdown = 0.0f;
 
         _gameHud?.SetReadyVisible(false);
+        _gameHud?.HideResult();
+        _gameHud?.SetCombatHudVisible(false);
         _gameHud?.SetStateText("Exploration");
         SetPlayerMovementEnabled(true);
+
+        // Reset only once the camera is off the arena, so no combatant is seen healing or
+        // snapping back mid-fight. Runtime state is ours; Game re-places the bodies.
+        ResetCombatants();
+        EncounterReset?.Invoke();
     }
 
     private void SetPlayerMovementEnabled(bool isEnabled)

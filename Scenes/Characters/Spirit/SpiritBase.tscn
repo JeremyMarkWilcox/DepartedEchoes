@@ -12,8 +12,17 @@ rings = 0
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_g4gaj"]
 
-[node name="SpiritBase" type="CharacterBody3D" unique_id=934341465]
+[node name="SpiritBase" type="CharacterBody3D" unique_id=934341465 node_paths=PackedStringArray("_visuals", "_mesh")]
 script = ExtResource("1_owoix")
+_visuals = NodePath("Visuals")
+_mesh = NodePath("Visuals/MeshInstance3D")
+_maxHealth = 26.0
+_moveSpeed = 3.6
+_attackDamage = 6.0
+_attackRange = 2.2
+_attackCooldownSeconds = 1.1
+_attackWindupSeconds = 0.3
+_approachPadding = 0.3
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2096964417]
 shape = SubResource("CapsuleShape3D_ra2i3")

@@ -56,11 +56,12 @@ public partial class CameraRig : Node3D
     [Export(PropertyHint.Range, "-80,-5,1")] private float _encounterPitchDegrees = -35.0f;
 
     /// <summary>
-    /// Spring length of the encounter view. Sized so the Player, the allied spirit and the enemy
-    /// all sit inside a 16:9 frame: the enemy placeholder is ~28 units from the Player's approach,
-    /// so the view has to sit well back to take in the whole line.
+    /// Spring length of the encounter view. Sized so the Player and both combatants sit inside a
+    /// 16:9 frame. The combatants now start close together near the encounter focus, so this can
+    /// sit much nearer than it did when the enemy waited ~28 units away, which keeps the fight
+    /// readable; the Player's entry point at x = 8.4 is what sets the lower bound.
     /// </summary>
-    [Export(PropertyHint.Range, "4,40,0.5")] private float _encounterDistance = 18.0f;
+    [Export(PropertyHint.Range, "4,40,0.5")] private float _encounterDistance = 13.0f;
 
     /// <summary>Seconds taken to blend into the encounter view, and back out of it.</summary>
     [Export(PropertyHint.Range, "0.1,5,0.05")] private float _blendDurationSeconds = 1.2f;

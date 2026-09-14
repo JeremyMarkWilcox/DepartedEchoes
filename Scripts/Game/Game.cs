@@ -22,7 +22,30 @@ public partial class Game : Node3D
         _gameHud?.SetStateText("Exploration");
         _gameHud?.SetReadyVisible(false);
 
+        if (_combatEncounter != null)
+        {
+            _combatEncounter.EncounterReset += OnEncounterReset;
+        }
+
         Input.MouseMode = Input.MouseModeEnum.Captured;
+    }
+
+    public override void _ExitTree()
+    {
+        if (_combatEncounter != null)
+        {
+            _combatEncounter.EncounterReset -= OnEncounterReset;
+        }
+    }
+
+    /// <summary>
+    /// The encounter decides when a reset is safe; putting the bodies back is still Game's job.
+    /// The Player keeps whatever exploration position they returned to.
+    /// </summary>
+    private void OnEncounterReset()
+    {
+        PlaceActorAtSpawn(_allySpirit, _allySpiritStart, "AllySpirit");
+        PlaceActorAtSpawn(_enemySpirit, _enemySpiritStart, "EnemySpirit");
     }
 
     /// <summary>

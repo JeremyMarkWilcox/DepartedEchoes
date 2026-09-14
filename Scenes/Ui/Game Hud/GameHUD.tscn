@@ -2,10 +2,13 @@
 
 [ext_resource type="Script" uid="uid://t8wswl4kr5lm" path="res://Scripts/Game/GameHud.cs" id="1_1uyrk"]
 
-[node name="GameHud" type="CanvasLayer" unique_id=851924364 node_paths=PackedStringArray("_readyLabel", "_stateLabel")]
+[node name="GameHud" type="CanvasLayer" unique_id=851924364 node_paths=PackedStringArray("_readyLabel", "_stateLabel", "_allyHealthLabel", "_enemyHealthLabel", "_resultLabel")]
 script = ExtResource("1_1uyrk")
 _readyLabel = NodePath("HUDRoot/ReadyLabel")
 _stateLabel = NodePath("HUDRoot/StateLabel")
+_allyHealthLabel = NodePath("HUDRoot/AllyHealthLabel")
+_enemyHealthLabel = NodePath("HUDRoot/EnemyHealthLabel")
+_resultLabel = NodePath("HUDRoot/ResultLabel")
 
 [node name="HUDRoot" type="Control" parent="." unique_id=629135280]
 layout_mode = 3
@@ -44,4 +47,49 @@ offset_right = 416.0
 offset_bottom = 44.0
 theme_override_font_sizes/font_size = 22
 text = "Exploration"
+vertical_alignment = 1
+
+[node name="AllyHealthLabel" type="Label" parent="HUDRoot"]
+visible = false
+layout_mode = 1
+anchors_preset = -1
+offset_left = 16.0
+offset_top = 50.0
+offset_right = 416.0
+offset_bottom = 78.0
+theme_override_colors/font_color = Color(0.62, 0.82, 1, 1)
+theme_override_font_sizes/font_size = 20
+text = "Ally  26 / 26"
+vertical_alignment = 1
+
+[node name="EnemyHealthLabel" type="Label" parent="HUDRoot"]
+visible = false
+layout_mode = 1
+anchors_preset = -1
+offset_left = 16.0
+offset_top = 80.0
+offset_right = 416.0
+offset_bottom = 108.0
+theme_override_colors/font_color = Color(1, 0.55, 0.5, 1)
+theme_override_font_sizes/font_size = 20
+text = "Enemy  24 / 24"
+vertical_alignment = 1
+
+[node name="ResultLabel" type="Label" parent="HUDRoot"]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -240.0
+offset_top = 60.0
+offset_right = 240.0
+offset_bottom = 116.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 40
+text = "Enemy defeated"
+horizontal_alignment = 1
 vertical_alignment = 1

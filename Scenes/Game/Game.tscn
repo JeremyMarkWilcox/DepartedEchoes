@@ -35,10 +35,12 @@ _combatEncounter = NodePath("CombatEncounter")
 
 [node name="CameraRig" parent="." unique_id=178904908 instance=ExtResource("5_gvja8")]
 
-[node name="CombatEncounter" parent="." unique_id=1734220970 node_paths=PackedStringArray("_cameraRig", "_player", "_battleTrigger", "_gameHud") instance=ExtResource("6_m1o7v")]
+[node name="CombatEncounter" parent="." unique_id=1734220970 node_paths=PackedStringArray("_cameraRig", "_player", "_battleTrigger", "_gameHud", "_allySpirit", "_enemySpirit") instance=ExtResource("6_m1o7v")]
 _cameraRig = NodePath("../CameraRig")
 _player = NodePath("../ActorContainer/Player")
 _battleTrigger = NodePath("../LevelContainer/PrototypeLevel/BattleTrigger")
 _gameHud = NodePath("../GameHud")
+_allySpirit = NodePath("../ActorContainer/AllySpirit")
+_enemySpirit = NodePath("../ActorContainer/EnemySpirit")
 
 [node name="GameHud" parent="." unique_id=806819728 instance=ExtResource("7_3586x")]

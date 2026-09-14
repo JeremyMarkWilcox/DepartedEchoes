@@ -1,9 +1,9 @@
 using Godot;
 
 /// <summary>
-/// Stationary encounter placeholder. Intentionally has no behavior: no navigation,
-/// attacks, health, or autonomous movement. Placement is owned by Game.
+/// The hostile spirit. All of its fight behaviour comes from CombatantBase; the tuning lives on
+/// the exports in EnemyBase.tscn. It has no navigation, abilities or decision making of its own.
 /// </summary>
-public partial class EnemyBase : ActorBase
+public partial class EnemyBase : CombatantBase
 {
 }
