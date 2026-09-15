@@ -97,6 +97,7 @@ public partial class CombatEncounter : Node3D
 
         SubscribeToCombatant(_allySpirit);
         SubscribeToCombatant(_enemySpirit);
+        SubscribeToCombatant(_player);
 
         // Player first purely for readability; the rig is told which one takes priority separately.
         _framingTargets = new ActorBase[] { _player, _allySpirit, _enemySpirit };
@@ -114,9 +115,10 @@ public partial class CombatEncounter : Node3D
 
         UnsubscribeFromCombatant(_allySpirit);
         UnsubscribeFromCombatant(_enemySpirit);
+        UnsubscribeFromCombatant(_player);
     }
 
-    private void SubscribeToCombatant(CombatantBase combatant)
+    private void SubscribeToCombatant(DamageableActor combatant)
     {
         if (combatant == null)
         {
@@ -128,7 +130,7 @@ public partial class CombatEncounter : Node3D
         combatant.HealthChanged += OnCombatantHealthChanged;
     }
 
-    private void UnsubscribeFromCombatant(CombatantBase combatant)
+    private void UnsubscribeFromCombatant(DamageableActor combatant)
     {
         if (combatant == null)
         {
@@ -280,6 +282,7 @@ public partial class CombatEncounter : Node3D
         SetPlayerMovementEnabled(true);
 
         // Only now may the combatants approach and attack.
+        _player?.StartCombat();
         _allySpirit?.StartCombat();
         _enemySpirit?.StartCombat();
     }
@@ -293,7 +296,7 @@ public partial class CombatEncounter : Node3D
     /// other's active flag and drops the swing it had winding up. Even so, a later notification is
     /// dropped by the state guard, so the reported result can never be overwritten.
     /// </summary>
-    private void OnCombatantDefeated(CombatantBase combatant)
+    private void OnCombatantDefeated(DamageableActor combatant)
     {
         if (State != EncounterState.Combat)
         {
@@ -302,19 +305,24 @@ public partial class CombatEncounter : Node3D
 
         StopCombatants();
         State = EncounterState.Resolving;
+        SetPlayerMovementEnabled(false);
 
         // Attributed to the combatant that actually fell, rather than inferred from both flags.
         bool enemyFell = combatant == _enemySpirit;
 
         _gameHud?.SetStateText("Resolving");
-        _gameHud?.ShowResult(enemyFell ? "Enemy defeated" : "Ally defeated");
+        _gameHud?.ShowResult(enemyFell ? "Enemy defeated" : combatant == _player ? "Player defeated" : "Ally defeated");
 
         _resultCountdown = _resultDurationSeconds;
     }
 
-    private void OnCombatantHealthChanged(CombatantBase combatant)
+    private void OnCombatantHealthChanged(DamageableActor combatant)
     {
-        if (combatant == _allySpirit)
+        if (combatant == _player)
+        {
+            _gameHud?.SetPlayerHealth(combatant.Health, combatant.MaxHealth);
+        }
+        else if (combatant == _allySpirit)
         {
             _gameHud?.SetAllyHealth(combatant.Health, combatant.MaxHealth);
         }
@@ -327,8 +335,9 @@ public partial class CombatEncounter : Node3D
     /// <summary>Clears runtime combat state on both sides and re-arms their opponents.</summary>
     private void ResetCombatants()
     {
+        _player?.ResetForEncounter();
         _allySpirit?.ResetForEncounter(_enemySpirit);
-        _enemySpirit?.ResetForEncounter(_allySpirit);
+        _enemySpirit?.ResetForEncounter(_player);
     }
 
     /// <summary>
@@ -337,6 +346,7 @@ public partial class CombatEncounter : Node3D
     /// </summary>
     private void StopCombatants()
     {
+        _player?.StopCombat();
         _allySpirit?.StopCombat();
         _enemySpirit?.StopCombat();
     }

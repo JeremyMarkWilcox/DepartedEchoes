@@ -2,6 +2,7 @@ using Godot;
 
 public partial class GameHud : CanvasLayer
 {
+    [Export] private Label _playerHealthLabel = null!;
     [Export] private Label _readyLabel = null!;
     [Export] private Label _stateLabel = null!;
     [Export] private Label _allyHealthLabel = null!;
@@ -24,9 +25,10 @@ public partial class GameHud : CanvasLayer
         }
     }
 
-    /// <summary>Shows or hides both health readouts. Hidden during exploration.</summary>
+    /// <summary>Shows or hides all participant health readouts. Hidden during exploration.</summary>
     public void SetCombatHudVisible(bool isVisible)
     {
+        if (_playerHealthLabel != null) _playerHealthLabel.Visible = isVisible;
         if (_allyHealthLabel != null)
         {
             _allyHealthLabel.Visible = isVisible;
@@ -37,6 +39,8 @@ public partial class GameHud : CanvasLayer
             _enemyHealthLabel.Visible = isVisible;
         }
     }
+
+    public void SetPlayerHealth(float current, float max) => SetHealthText(_playerHealthLabel, "Player", current, max);
 
     public void SetAllyHealth(float current, float max)
     {

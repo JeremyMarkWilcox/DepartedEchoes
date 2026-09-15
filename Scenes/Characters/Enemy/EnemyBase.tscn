@@ -18,12 +18,12 @@ roughness = 0.6
 script = ExtResource("1_enemy")
 _visuals = NodePath("Visuals")
 _mesh = NodePath("Visuals/MeshInstance3D")
-_maxHealth = 24.0
-_moveSpeed = 3.2
-_attackDamage = 5.0
+_maxHealth = 60.0
+_moveSpeed = 6.2
+_attackDamage = 10.0
 _attackRange = 2.3
 _attackCooldownSeconds = 1.25
-_attackWindupSeconds = 0.35
+_attackWindupSeconds = 0.65
 _approachPadding = 0.3
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

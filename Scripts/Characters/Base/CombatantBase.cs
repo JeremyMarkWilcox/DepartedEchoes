@@ -9,7 +9,7 @@ using Godot;
 /// Authored values are the exports below; everything the fight changes lives in the runtime
 /// fields and is cleared explicitly by <see cref="ResetForEncounter"/>.
 /// </summary>
-public partial class CombatantBase : ActorBase
+public partial class CombatantBase : DamageableActor
 {
     /// <summary>Holds the mesh. Rotated for facing and tilted on defeat; never scaled by physics.</summary>
     [Export] private Node3D _visuals = null!;
@@ -18,17 +18,16 @@ public partial class CombatantBase : ActorBase
     [Export] private MeshInstance3D _mesh = null!;
 
     [ExportGroup("Combat")]
-    [Export(PropertyHint.Range, "1,200,1")] private float _maxHealth = 24.0f;
     [Export(PropertyHint.Range, "0.5,20,0.1")] private float _moveSpeed = 3.4f;
-    [Export(PropertyHint.Range, "1,50,0.5")] private float _attackDamage = 6.0f;
+    [Export(PropertyHint.Range, "1,50,0.5")] protected float _attackDamage = 6.0f;
 
     /// <summary>Furthest distance a hit can land from. Raised if it is inside the contact distance.</summary>
     [Export(PropertyHint.Range, "0.5,10,0.1")] private float _attackRange = 2.2f;
 
-    [Export(PropertyHint.Range, "0.1,5,0.05")] private float _attackCooldownSeconds = 1.2f;
+    [Export(PropertyHint.Range, "0.1,5,0.05")] protected float _attackCooldownSeconds = 1.2f;
 
     /// <summary>Visible anticipation before the hit lands. The combatant holds still through it.</summary>
-    [Export(PropertyHint.Range, "0.05,2,0.05")] private float _attackWindupSeconds = 0.3f;
+    [Export(PropertyHint.Range, "0.05,2,0.05")] protected float _attackWindupSeconds = 0.3f;
 
     /// <summary>Gap left between the two collision radii when approaching.</summary>
     [Export(PropertyHint.Range, "0,2,0.05")] private float _approachPadding = 0.3f;
@@ -40,14 +39,11 @@ public partial class CombatantBase : ActorBase
     private static readonly Color FallbackAlbedo = new(0.72f, 0.78f, 0.9f);
 
     // Runtime state - reset for every encounter, never authored.
-    private float _health;
-    private CombatantBase _target;
+    protected DamageableActor _target;
     private float _cooldownRemaining;
     private float _windupRemaining;
     private float _hitFlashRemaining;
-    private float _facingYaw;
-    private bool _isCombatActive;
-    private bool _isDefeated;
+    protected float _facingYaw;
 
     private float _gravity = 9.8f;
     private StandardMaterial3D _runtimeMaterial;
@@ -55,20 +51,8 @@ public partial class CombatantBase : ActorBase
     private Vector3 _baselineVisualsRotation;
     private Vector3 _baselineVisualsScale = Vector3.One;
 
-    /// <summary>Raised once, when this combatant's health first reaches zero.</summary>
-    public event Action<CombatantBase> Defeated;
-
-    /// <summary>Raised whenever health changes, including on reset, so the HUD can follow.</summary>
-    public event Action<CombatantBase> HealthChanged;
-
-    public float Health => _health;
-
-    public float MaxHealth => _maxHealth;
-
-    public bool IsDefeated => _isDefeated;
-
     /// <summary>True while an attack is in its anticipation window, before the hit lands.</summary>
-    public bool IsWindingUp => _windupRemaining > 0.0f;
+    public virtual bool IsWindingUp => _windupRemaining > 0.0f;
 
     public override void _Ready()
     {
@@ -89,7 +73,7 @@ public partial class CombatantBase : ActorBase
     /// Clears every runtime value and assigns the opponent for the coming fight. Safe to call
     /// between encounters; it does not move the body, which stays Game's responsibility.
     /// </summary>
-    public void ResetForEncounter(CombatantBase opponent)
+    public virtual void ResetForEncounter(DamageableActor opponent)
     {
         if (ReferenceEquals(opponent, this))
         {
@@ -116,11 +100,11 @@ public partial class CombatantBase : ActorBase
         }
 
         RefreshVisuals();
-        HealthChanged?.Invoke(this);
+        ResetHealth();
     }
 
     /// <summary>Lets this combatant start approaching and attacking. Called on entering Combat.</summary>
-    public void StartCombat()
+    public override void StartCombat()
     {
         if (_isDefeated)
         {
@@ -134,7 +118,7 @@ public partial class CombatantBase : ActorBase
     /// Stops movement and drops any attack still winding up. Used for defeat, the debug exit and
     /// every other cancellation, so there is one stop path. A defeated pose is left in place.
     /// </summary>
-    public void StopCombat()
+    public override void StopCombat()
     {
         _isCombatActive = false;
         _windupRemaining = 0.0f;
@@ -145,35 +129,10 @@ public partial class CombatantBase : ActorBase
         RefreshVisuals();
     }
 
-    /// <summary>
-    /// Applies one hit. Health is clamped at zero and <see cref="Defeated"/> fires exactly once,
-    /// because the defeated flag short-circuits every later call.
-    /// </summary>
-    public void ApplyDamage(float amount)
+    protected override void OnDamageReceived()
     {
-        if (_isDefeated || amount <= 0.0f)
-        {
-            return;
-        }
-
-        _health = Mathf.Max(0.0f, _health - amount);
         _hitFlashRemaining = HitFlashSeconds;
-        HealthChanged?.Invoke(this);
-
-        if (_health > 0.0f)
-        {
-            RefreshVisuals();
-            return;
-        }
-
-        _isDefeated = true;
-        _isCombatActive = false;
-        _windupRemaining = 0.0f;
-        _cooldownRemaining = 0.0f;
-        Velocity = new Vector3(0.0f, Velocity.Y, 0.0f);
-
         RefreshVisuals();
-        Defeated?.Invoke(this);
     }
 
     public override void _PhysicsProcess(double delta)
@@ -201,7 +160,7 @@ public partial class CombatantBase : ActorBase
         RefreshVisuals();
     }
 
-    private void TickCombat(float dt)
+    protected virtual void TickCombat(float dt)
     {
         _cooldownRemaining = Mathf.Max(0.0f, _cooldownRemaining - dt);
 
@@ -265,7 +224,7 @@ public partial class CombatantBase : ActorBase
         _target.ApplyDamage(_attackDamage);
     }
 
-    private void MoveTowardTarget(float distance, float stopDistance, float dt)
+    protected void MoveTowardTarget(float distance, float stopDistance, float dt)
     {
         Vector3 toTarget = _target.GlobalPosition - GlobalPosition;
         toTarget.Y = 0.0f;
@@ -309,17 +268,17 @@ public partial class CombatantBase : ActorBase
     }
 
     /// <summary>A target must be present, still in the tree, alive and not this combatant.</summary>
-    private bool IsTargetValid()
+    protected bool IsTargetValid()
     {
         return _target != null
                && IsInstanceValid(_target)
                && !ReferenceEquals(_target, this)
                && _target.IsInsideTree()
-               && !_target.IsDefeated;
+               && !_target.IsDefeated && _target.IsCombatActive;
     }
 
     /// <summary>Where the pair should come to rest, derived from both collision radii.</summary>
-    private float ContactDistanceTo(CombatantBase other)
+    protected float ContactDistanceTo(DamageableActor other)
     {
         return CollisionRadius + other.CollisionRadius + _approachPadding;
     }
@@ -328,19 +287,19 @@ public partial class CombatantBase : ActorBase
     /// The authored range, but never less than the distance the pair actually stops at, or a
     /// mistuned range would leave them standing nose to nose unable to connect.
     /// </summary>
-    private float EffectiveAttackRangeTo(CombatantBase other)
+    protected float EffectiveAttackRangeTo(DamageableActor other)
     {
         return Mathf.Max(_attackRange, ContactDistanceTo(other) + 0.1f);
     }
 
-    private float PlanarDistanceTo(Node3D other)
+    protected float PlanarDistanceTo(Node3D other)
     {
         Vector3 delta = other.GlobalPosition - GlobalPosition;
         delta.Y = 0.0f;
         return delta.Length();
     }
 
-    private void FaceTarget()
+    protected void FaceTarget()
     {
         Vector3 toTarget = _target.GlobalPosition - GlobalPosition;
         toTarget.Y = 0.0f;
