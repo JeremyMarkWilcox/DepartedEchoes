@@ -55,6 +55,12 @@ public partial class CombatEncounter : Node3D
     private float _resultCountdown;
 
     /// <summary>
+    /// The actors the encounter camera keeps in frame, built once from the exported references.
+    /// Handing the rig a cached array keeps it from searching the scene tree every frame.
+    /// </summary>
+    private ActorBase[] _framingTargets = Array.Empty<ActorBase>();
+
+    /// <summary>
     /// Bumped whenever an encounter starts or ends. Deferred callbacks capture the value they
     /// were scheduled under, so a Ready timer left pending by an exit can never drive a later
     /// encounter into Combat.
@@ -91,6 +97,9 @@ public partial class CombatEncounter : Node3D
 
         SubscribeToCombatant(_allySpirit);
         SubscribeToCombatant(_enemySpirit);
+
+        // Player first purely for readability; the rig is told which one takes priority separately.
+        _framingTargets = new ActorBase[] { _player, _allySpirit, _enemySpirit };
 
         _gameHud?.SetCombatHudVisible(false);
         _gameHud?.HideResult();
@@ -213,7 +222,9 @@ public partial class CombatEncounter : Node3D
         _gameHud?.SetCombatHudVisible(true);
         _gameHud?.SetStateText("Setup - framing encounter");
 
-        _pendingBlendToken = _cameraRig?.BlendToEncounterView(_combatCenter) ?? CameraRig.InvalidBlendToken;
+        // CombatCenter stays the fallback focus for when no actor reference is usable.
+        _pendingBlendToken = _cameraRig?.BlendToEncounterView(_combatCenter, _framingTargets, _player)
+                             ?? CameraRig.InvalidBlendToken;
 
         if (_pendingBlendToken == CameraRig.InvalidBlendToken)
         {

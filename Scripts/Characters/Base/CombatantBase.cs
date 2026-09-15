@@ -50,7 +50,6 @@ public partial class CombatantBase : ActorBase
     private bool _isDefeated;
 
     private float _gravity = 9.8f;
-    private float _collisionRadius = 0.5f;
     private StandardMaterial3D _runtimeMaterial;
     private Color _baselineAlbedo = FallbackAlbedo;
     private Vector3 _baselineVisualsRotation;
@@ -71,9 +70,6 @@ public partial class CombatantBase : ActorBase
     /// <summary>True while an attack is in its anticipation window, before the hit lands.</summary>
     public bool IsWindingUp => _windupRemaining > 0.0f;
 
-    /// <summary>Radius of the body's own collision shape, used to derive a stopping distance.</summary>
-    public float CollisionRadius => _collisionRadius;
-
     public override void _Ready()
     {
         base._Ready();
@@ -82,7 +78,6 @@ public partial class CombatantBase : ActorBase
             .GetSetting("physics/3d/default_gravity", 9.8f)
             .AsSingle();
 
-        _collisionRadius = ResolveCollisionRadius();
         CaptureVisualBaseline();
 
         _health = _maxHealth;
@@ -326,7 +321,7 @@ public partial class CombatantBase : ActorBase
     /// <summary>Where the pair should come to rest, derived from both collision radii.</summary>
     private float ContactDistanceTo(CombatantBase other)
     {
-        return _collisionRadius + other.CollisionRadius + _approachPadding;
+        return CollisionRadius + other.CollisionRadius + _approachPadding;
     }
 
     /// <summary>
@@ -356,30 +351,6 @@ public partial class CombatantBase : ActorBase
         }
 
         _facingYaw = Mathf.Atan2(-toTarget.X, -toTarget.Z);
-    }
-
-    private float ResolveCollisionRadius()
-    {
-        // Only direct children, so a Hurtbox area's own shape cannot be mistaken for the body's.
-        foreach (Node child in GetChildren())
-        {
-            if (child is not CollisionShape3D collider)
-            {
-                continue;
-            }
-
-            switch (collider.Shape)
-            {
-                case CapsuleShape3D capsule:
-                    return capsule.Radius;
-                case SphereShape3D sphere:
-                    return sphere.Radius;
-                case CylinderShape3D cylinder:
-                    return cylinder.Radius;
-            }
-        }
-
-        return 0.5f;
     }
 
     /// <summary>
