@@ -13,7 +13,7 @@ public partial class CombatEncounter : Node3D
         Ready,
         Combat,
 
-        /// <summary>Someone has fallen: both combatants are stopped and the result is on screen.</summary>
+        /// <summary>The player or enemy has fallen: combat stops and the result is on screen.</summary>
         Resolving,
 
         /// <summary>Blending back to the exploration view. Movement stays held until it lands.</summary>
@@ -28,10 +28,20 @@ public partial class CombatEncounter : Node3D
     [Export] private GameHud _gameHud = null!;
 
     /// <summary>The two explicit opponents. A one-versus-one prototype needs no faction lookup.</summary>
-    [Export] private CombatantBase _allySpirit = null!;
+    [Export] private SpiritBase _allySpirit = null!;
 
-    [Export] private CombatantBase _enemySpirit = null!;
+    [Export] private EnemyBase _enemySpirit = null!;
 
+    [ExportGroup("Help Me")]
+    [Export(PropertyHint.Range, "1,15,0.5")] private float _helpRadius = 6.0f;
+    [Export(PropertyHint.Range, "1,30,0.5")] private float _helpCooldownSeconds = 8.0f;
+    private float _helpCooldownRemaining, _helpNoticeRemaining;
+    private string _helpNotice = "";
+    public float HelpCooldownRemaining => _helpCooldownRemaining;
+    public bool IsHelpInProgress => _allySpirit?.IsRespondingToHelp == true
+        || _enemySpirit?.HasPendingDistraction == true || _enemySpirit?.IsDistracted == true;
+
+    [ExportGroup("Encounter Timing")]
     /// <summary>How long the Ready banner is held before Combat begins.</summary>
     [Export(PropertyHint.Range, "0.1,5,0.1")] private float _readyDurationSeconds = 1.5f;
 
@@ -144,6 +154,26 @@ public partial class CombatEncounter : Node3D
     /// <summary>Runs down the result display, then hands off to the existing return path.</summary>
     public override void _Process(double delta)
     {
+        if (State == EncounterState.Combat)
+        {
+            _helpCooldownRemaining = Mathf.Max(0, _helpCooldownRemaining - (float)delta);
+            _helpNoticeRemaining = Mathf.Max(0, _helpNoticeRemaining - (float)delta);
+            string response = _enemySpirit.IsDistracted ? "Enemy targeting ally"
+                : _enemySpirit.HasPendingDistraction ? "Distraction earned - waiting for attack to finish"
+                : _allySpirit.HelpFeedback;
+            if (_helpNoticeRemaining > 0) response = _helpNotice;
+            bool allyDown = _allySpirit.IsDefeated;
+            if (allyDown) response = "Ally down - keep moving!";
+            string availability = allyDown ? "Unavailable"
+                : _helpCooldownRemaining > 0 ? $"{Mathf.CeilToInt(_helpCooldownRemaining)}s"
+                : IsHelpInProgress ? "In progress" : "Ready";
+            _gameHud?.SetHelpStatus($"Help me [Q / Y]: {availability}\n{response}");
+        }
+        else
+        {
+            _gameHud?.SetHelpStatus("");
+        }
+
         if (State != EncounterState.Resolving || _resultCountdown <= 0.0f)
         {
             return;
@@ -174,6 +204,13 @@ public partial class CombatEncounter : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (@event.IsActionPressed("command_help", allowEcho: false))
+        {
+            GetViewport().SetInputAsHandled();
+            TryRequestHelp();
+            return;
+        }
+
         // allowEcho: false so holding the key repeats into nothing - one press acts once.
         if (!@event.IsActionPressed(DebugEndEncounterAction, allowEcho: false))
         {
@@ -184,6 +221,54 @@ public partial class CombatEncounter : Node3D
 
         // Harmless when no encounter is running, or while one is already returning.
         EndEncounter();
+    }
+
+    /// <summary>Only the initial request checks player proximity; retreat remains allowed.</summary>
+    public bool TryRequestHelp()
+    {
+        if (State != EncounterState.Combat || !_player.IsCombatActive || _player.IsDefeated) return false;
+        if (_allySpirit.IsDefeated || !_allySpirit.IsCombatActive)
+        {
+            ShowHelpNotice("Ally unavailable");
+            return false;
+        }
+        if (IsHelpInProgress)
+        {
+            ShowHelpNotice("Already helping");
+            return false;
+        }
+        if (_helpCooldownRemaining > 0)
+        {
+            ShowHelpNotice("Help is recharging");
+            return false;
+        }
+        if (!_enemySpirit.IsCombatActive || _enemySpirit.IsDefeated
+            || _player.GlobalPosition.DistanceSquaredTo(_enemySpirit.GlobalPosition) > _helpRadius * _helpRadius)
+        {
+            ShowHelpNotice("No nearby threat");
+            return false;
+        }
+        if (!_allySpirit.TryAcceptHelp(_enemySpirit))
+        {
+            ShowHelpNotice("Ally unavailable");
+            return false;
+        }
+        _helpCooldownRemaining = Mathf.Max(0.1f, _helpCooldownSeconds);
+        ShowHelpNotice("Help requested - ally responding");
+        return true;
+    }
+
+    private void ShowHelpNotice(string text)
+    {
+        _helpNotice = text;
+        _helpNoticeRemaining = 1.2f;
+    }
+
+    private void ClearHelpCommand()
+    {
+        _helpCooldownRemaining = _helpNoticeRemaining = 0;
+        _helpNotice = "";
+        _gameHud?.SetHelpStatus("");
     }
 
     private void OnBattleTriggerBodyEntered(Node3D body)
@@ -288,18 +373,21 @@ public partial class CombatEncounter : Node3D
     }
 
     /// <summary>
-    /// Settles the fight exactly once.
-    ///
-    /// The rule for simultaneous defeat is simply first past the post: whoever reaches zero first
-    /// is the loser, and the outcome is attributed to that combatant. Two cannot genuinely fall on
-    /// the same frame, because this handler stops both sides before returning, which clears the
-    /// other's active flag and drops the swing it had winding up. Even so, a later notification is
-    /// dropped by the state guard, so the reported result can never be overwritten.
+    /// Ally defeat leaves the player fighting. Only player or enemy defeat settles the encounter;
+    /// the first terminal outcome stops all participants and cannot be overwritten.
     /// </summary>
     private void OnCombatantDefeated(DamageableActor combatant)
     {
         if (State != EncounterState.Combat)
         {
+            return;
+        }
+
+        if (combatant == _allySpirit)
+        {
+            // DamageableActor already stopped the ally and cancelled its help response.
+            // The enemy completes its committed attack before reacquiring the player.
+            ShowHelpNotice("Ally down - keep moving!");
             return;
         }
 
@@ -311,7 +399,7 @@ public partial class CombatEncounter : Node3D
         bool enemyFell = combatant == _enemySpirit;
 
         _gameHud?.SetStateText("Resolving");
-        _gameHud?.ShowResult(enemyFell ? "Enemy defeated" : combatant == _player ? "Player defeated" : "Ally defeated");
+        _gameHud?.ShowResult(enemyFell ? "Enemy defeated" : "Player defeated");
 
         _resultCountdown = _resultDurationSeconds;
     }
@@ -335,6 +423,7 @@ public partial class CombatEncounter : Node3D
     /// <summary>Clears runtime combat state on both sides and re-arms their opponents.</summary>
     private void ResetCombatants()
     {
+        ClearHelpCommand();
         _player?.ResetForEncounter();
         _allySpirit?.ResetForEncounter(_enemySpirit);
         _enemySpirit?.ResetForEncounter(_player);
@@ -346,6 +435,7 @@ public partial class CombatEncounter : Node3D
     /// </summary>
     private void StopCombatants()
     {
+        ClearHelpCommand();
         _player?.StopCombat();
         _allySpirit?.StopCombat();
         _enemySpirit?.StopCombat();

@@ -207,6 +207,13 @@ public partial class CombatantBase : DamageableActor
         }
     }
 
+    /// <summary>A command replaces anticipation instead of leaving a delayed attack behind.</summary>
+    protected void CancelPendingAttack()
+    {
+        _windupRemaining = 0.0f;
+        Velocity = new Vector3(0.0f, Velocity.Y, 0.0f);
+    }
+
     /// <summary>
     /// Lands a single hit. The cooldown is spent either way, and validity plus range are rechecked
     /// here rather than trusted from when the windup started - the target may have been defeated,

@@ -1,6 +1,6 @@
 using Godot;
 
-/// <summary>Prototype pursuer: one fixed player target and a committed rectangular strike.</summary>
+/// <summary>Pursuer with committed strikes and a temporary, earned distraction.</summary>
 public partial class EnemyBase : CombatantBase
 {
     public enum AttackPhase { Pursue, Windup, Strike, Recovery }
@@ -8,13 +8,21 @@ public partial class EnemyBase : CombatantBase
     [Export] private float _strikeWidth = 1.6f;
     [Export] private float _recoverySeconds = 0.9f;
     private const float StrikeSeconds = 0.12f;
-    private float _phaseRemaining, _targetCueRemaining;
+    private float _phaseRemaining;
+    private DamageableActor _primaryTarget;
+    private SpiritBase _pendingDistraction, _distractionTarget;
+    private float _pendingDistractionSeconds, _distractionRemaining;
     private Vector3 _strikeOrigin, _strikeForward;
     private MeshInstance3D _telegraph;
     private StandardMaterial3D _telegraphMaterial;
     private Label3D _phaseLabel;
     public AttackPhase Phase { get; private set; }
     public Vector3 StrikeForward => _strikeForward;
+    public DamageableActor CurrentTarget => _target;
+    public bool HasPendingDistraction => IsInstanceValid(_pendingDistraction);
+    public bool IsDistracted => IsInstanceValid(_distractionTarget);
+    public bool CanAcceptDistraction => IsCombatActive && !IsDefeated
+        && !HasPendingDistraction && !IsDistracted;
     public override bool IsWindingUp => _isCombatActive && Phase == AttackPhase.Windup;
     public override void _Ready()
     {
@@ -44,25 +52,69 @@ public partial class EnemyBase : CombatantBase
     public override void ResetForEncounter(DamageableActor opponent)
     {
         base.ResetForEncounter(opponent);
+        _primaryTarget = opponent;
         ClearAttack();
     }
-    public override void StartCombat()
+
+    public bool TryQueueDistraction(SpiritBase ally, float seconds)
     {
-        base.StartCombat();
-        _targetCueRemaining = 1.2f;
+        if (!CanAcceptDistraction || !IsAvailable(ally) || !float.IsFinite(seconds) || seconds <= 0)
+            return false;
+        _pendingDistraction = ally;
+        _pendingDistractionSeconds = seconds;
+        return true;
+    }
+
+    public void CancelDistraction(SpiritBase ally)
+    {
+        if (_pendingDistraction == ally) _pendingDistraction = null;
+        // Expiry is applied only between attacks; cancellation cannot redirect a telegraph.
+        if (_distractionTarget == ally) _distractionRemaining = 0;
+    }
+
+    private static bool IsAvailable(DamageableActor actor) => IsInstanceValid(actor)
+        && actor.IsInsideTree() && actor.IsCombatActive && !actor.IsDefeated;
+
+    private void UpdateDistraction(float dt)
+    {
+        _distractionRemaining = Mathf.Max(0, _distractionRemaining - dt);
+        if (!IsAvailable(_pendingDistraction)) _pendingDistraction = null;
+        if (Phase != AttackPhase.Pursue) return;
+
+        if (IsDistracted && (_distractionRemaining <= 0 || !IsAvailable(_distractionTarget)))
+        {
+            _distractionTarget = null;
+            _target = _primaryTarget;
+        }
+        if (HasPendingDistraction)
+        {
+            _distractionTarget = _pendingDistraction;
+            _target = _distractionTarget;
+            _distractionRemaining = _pendingDistractionSeconds;
+            _pendingDistraction = null;
+        }
     }
     public override void StopCombat() { base.StopCombat(); ClearAttack(); }
     private void ClearAttack()
     {
         Phase = AttackPhase.Pursue;
-        _phaseRemaining = _targetCueRemaining = 0;
+        _phaseRemaining = _pendingDistractionSeconds = _distractionRemaining = 0;
+        _pendingDistraction = _distractionTarget = null;
+        _target = _primaryTarget;
         if (_telegraph != null) _telegraph.Visible = false;
         if (_phaseLabel != null) _phaseLabel.Visible = false;
     }
     protected override void TickCombat(float dt)
     {
-        if (!IsTargetValid()) { ClearAttack(); Velocity = new Vector3(0, Velocity.Y, 0); return; }
-        _targetCueRemaining = Mathf.Max(0, _targetCueRemaining - dt);
+        UpdateDistraction(dt);
+        // A fallen target does not cancel recovery or redirect a strike toward the player.
+        // UpdateDistraction reacquires the player when this attack cycle reaches Pursue.
+        if (!IsTargetValid() && Phase == AttackPhase.Pursue)
+        {
+            ClearAttack();
+            Velocity = new Vector3(0, Velocity.Y, 0);
+            return;
+        }
         if (Phase == AttackPhase.Pursue)
         {
             FaceTarget();
@@ -92,7 +144,7 @@ public partial class EnemyBase : CombatantBase
                     Phase = AttackPhase.Strike;
                     _phaseRemaining = StrikeSeconds;
                     // One hit test at the strike instant, not a homing or continuously damaging zone.
-                    if (StrikeContains(_target)) _target.ApplyDamage(_attackDamage);
+                    if (IsTargetValid() && StrikeContains(_target)) _target.ApplyDamage(_attackDamage);
                     if (!_isCombatActive) return; // Damage can synchronously end the encounter.
                 }
                 else if (Phase == AttackPhase.Strike) { Phase = AttackPhase.Recovery; _phaseRemaining = Mathf.Max(0.1f, _recoverySeconds); }
@@ -101,9 +153,12 @@ public partial class EnemyBase : CombatantBase
         }
         _telegraph.Visible = Phase == AttackPhase.Windup || Phase == AttackPhase.Strike;
         _telegraphMaterial.AlbedoColor = Phase == AttackPhase.Strike ? new Color(1, 0.15f, 0.1f, 0.75f) : new Color(1, 0.65f, 0.05f, 0.5f);
-        _phaseLabel.Text = Phase == AttackPhase.Windup ? "WINDUP !" : Phase == AttackPhase.Strike ? "STRIKE" :
-            Phase == AttackPhase.Recovery ? "RECOVER" : "TARGET: PLAYER";
-        _phaseLabel.Visible = Phase != AttackPhase.Pursue || _targetCueRemaining > 0;
+        string targetCue = IsDistracted ? "TARGET: ALLY" : "TARGET: PLAYER";
+        string phaseCue = Phase == AttackPhase.Windup ? "WINDUP !" : Phase == AttackPhase.Strike ? "STRIKE" :
+            Phase == AttackPhase.Recovery ? "RECOVER" : "PURSUING";
+        _phaseLabel.Text = targetCue + "\n" + phaseCue;
+        _phaseLabel.Modulate = IsDistracted ? new Color(0.5f, 0.85f, 1) : Colors.White;
+        _phaseLabel.Visible = true;
     }
     public bool StrikeContains(DamageableActor actor)
     {

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://t8wswl4kr5lm" path="res://Scripts/Game/GameHud.cs" id="1_1uyrk"]
 
-[node name="GameHud" type="CanvasLayer" unique_id=851924364 node_paths=PackedStringArray("_playerHealthLabel", "_readyLabel", "_stateLabel", "_allyHealthLabel", "_enemyHealthLabel", "_resultLabel")]
+[node name="GameHud" type="CanvasLayer" unique_id=851924364 node_paths=PackedStringArray("_playerHealthLabel", "_readyLabel", "_stateLabel", "_allyHealthLabel", "_enemyHealthLabel", "_resultLabel", "_helpLabel")]
 script = ExtResource("1_1uyrk")
 _playerHealthLabel = NodePath("HUDRoot/PlayerHealthLabel")
 _readyLabel = NodePath("HUDRoot/ReadyLabel")
@@ -10,6 +10,7 @@ _stateLabel = NodePath("HUDRoot/StateLabel")
 _allyHealthLabel = NodePath("HUDRoot/AllyHealthLabel")
 _enemyHealthLabel = NodePath("HUDRoot/EnemyHealthLabel")
 _resultLabel = NodePath("HUDRoot/ResultLabel")
+_helpLabel = NodePath("HUDRoot/HelpLabel")
 
 [node name="HUDRoot" type="Control" parent="." unique_id=629135280]
 layout_mode = 3
@@ -110,3 +111,14 @@ offset_top = 146.0
 offset_right = 600.0
 offset_bottom = 174.0
 text = "Combat dodge: Space / A (Cross) | End: exit | Esc: release mouse"
+
+[node name="HelpLabel" type="Label" parent="HUDRoot"]
+visible = false
+offset_left = 16.0
+offset_top = 180.0
+offset_right = 590.0
+offset_bottom = 245.0
+theme_override_colors/font_color = Color(0.62, 0.82, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "Help me [Q / Y]: Ready"
+autowrap_mode = 2

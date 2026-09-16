@@ -8,6 +8,14 @@ public partial class GameHud : CanvasLayer
     [Export] private Label _allyHealthLabel = null!;
     [Export] private Label _enemyHealthLabel = null!;
     [Export] private Label _resultLabel = null!;
+    [Export] private Label _helpLabel = null!;
+
+    public void SetHelpStatus(string text)
+    {
+        if (_helpLabel == null) return;
+        _helpLabel.Text = text;
+        _helpLabel.Visible = !string.IsNullOrEmpty(text);
+    }
 
     public void SetStateText(string text)
     {
