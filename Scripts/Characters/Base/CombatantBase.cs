@@ -201,11 +201,23 @@ public partial class CombatantBase : DamageableActor
             Velocity = new Vector3(0.0f, Velocity.Y, 0.0f);
         }
 
-        if (_cooldownRemaining <= 0.0f && distance <= EffectiveAttackRangeTo(_target))
+        if (_cooldownRemaining <= 0.0f && IsInAttackRange(_target) && ShouldCommitAttack())
         {
             _windupRemaining = _attackWindupSeconds;
         }
     }
+
+    /// <summary>Called only for an eligible new attack, never during an existing windup.</summary>
+    protected virtual bool ShouldCommitAttack() => true;
+
+    protected bool IsInAttackRange(DamageableActor other)
+    {
+        return PlanarDistanceTo(other) <= EffectiveAttackRangeTo(other)
+            && Mathf.Abs(GlobalPosition.Y - other.GlobalPosition.Y)
+                <= CollisionHalfHeight + other.CollisionHalfHeight;
+    }
+
+    protected bool IsAttackCoolingDown => _cooldownRemaining > 0;
 
     /// <summary>A command replaces anticipation instead of leaving a delayed attack behind.</summary>
     protected void CancelPendingAttack()
@@ -223,7 +235,7 @@ public partial class CombatantBase : DamageableActor
     {
         _cooldownRemaining = _attackCooldownSeconds;
 
-        if (!IsTargetValid() || PlanarDistanceTo(_target) > EffectiveAttackRangeTo(_target))
+        if (!IsTargetValid() || !IsInAttackRange(_target))
         {
             return;
         }
