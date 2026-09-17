@@ -190,7 +190,7 @@ public partial class CombatantBase : DamageableActor
         }
 
         float distance = PlanarDistanceTo(_target);
-        float stopDistance = ContactDistanceTo(_target);
+        float stopDistance = ApproachStopDistanceTo(_target);
 
         if (distance > stopDistance)
         {
@@ -240,9 +240,16 @@ public partial class CombatantBase : DamageableActor
             return;
         }
 
-        DamageableActor target = _target;
+        ExecuteAttack(_target, GetAttackDamage());
+    }
+
+    protected virtual float ApproachStopDistanceTo(DamageableActor target) => ContactDistanceTo(target);
+
+    protected virtual void ExecuteAttack(DamageableActor target, float damage) => ApplyAttackDamage(target, damage);
+
+    protected void ApplyAttackDamage(DamageableActor target, float damage)
+    {
         float healthBefore = target.Health;
-        float damage = GetAttackDamage();
         target.ApplyDamage(damage);
 
         // Defeat callbacks can stop the encounter synchronously. Do not revive hit feedback.

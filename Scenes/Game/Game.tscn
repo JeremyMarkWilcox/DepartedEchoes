@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://kkaml42l40ls" path="res://Scripts/Game/Game.cs" id="1_rdw05"]
 [ext_resource type="PackedScene" uid="uid://c6o7q5wlvco23" path="res://Scenes/Levels/PrototypeLevel.tscn" id="2_1q8bt"]
 [ext_resource type="PackedScene" uid="uid://t48gn1hsfpdf" path="res://Scenes/Characters/Player/Player.tscn" id="2_xbxml"]
-[ext_resource type="PackedScene" uid="uid://o2dykulbtxng" path="res://Scenes/Characters/Spirit/SpiritBase.tscn" id="3_ln2h6"]
+[ext_resource type="PackedScene" path="res://Scenes/Characters/Spirit/ChannelerSpirit.tscn" id="3_ln2h6"]
 [ext_resource type="PackedScene" path="res://Scenes/Characters/Enemy/EnemyBase.tscn" id="4_enemy"]
 [ext_resource type="PackedScene" uid="uid://c7ghqtvdrlyy6" path="res://Scenes/Camera/CameraRig.tscn" id="5_gvja8"]
 [ext_resource type="PackedScene" uid="uid://l7tuxlqlubtf" path="res://Scenes/Combat/CombatEncounter.tscn" id="6_m1o7v"]

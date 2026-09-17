@@ -61,7 +61,7 @@ public partial class SpiritBase
     {
         ClearDistanceCommand();
         Velocity = new Vector3(0, Velocity.Y, 0);
-        // Normal melee approach resumes next tick, subject to the existing hesitation/cooldown.
+        // Normal family attack behavior resumes next tick, subject to existing hesitation/cooldown.
     }
 
     private void ClearDistanceCommand()
