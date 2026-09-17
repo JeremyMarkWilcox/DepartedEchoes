@@ -1,0 +1,26 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://Scenes/Characters/Spirit/SpiritBase.tscn" id="1_base"]
+[ext_resource type="Script" path="res://Scripts/Characters/Spirit/TricksterSpirit.cs" id="2_script"]
+
+[sub_resource type="StandardMaterial3D" id="Material_trickster"]
+albedo_color = Color(0.75, 0.25, 0.95, 1)
+
+[sub_resource type="PrismMesh" id="Mesh_trickster"]
+material = SubResource("Material_trickster")
+size = Vector3(1.2, 1.5, 1.2)
+
+[node name="TricksterSpirit" instance=ExtResource("1_base")]
+script = ExtResource("2_script")
+_maxHealth = 18.0
+_moveSpeed = 8.0
+_attackDamage = 5.0
+_attackRange = 3.1
+_attackCooldownSeconds = 1.0
+_attackWindupSeconds = 0.22
+_reengageDistance = 2.8
+_burstSpeed = 9.0
+_burstSeconds = 0.35
+
+[node name="MeshInstance3D" parent="Visuals" index="0"]
+mesh = SubResource("Mesh_trickster")

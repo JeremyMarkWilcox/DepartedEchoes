@@ -6,13 +6,13 @@ Use family names for scenes, with roles described separately:
 | --- | --- | --- |
 | Guardian | Melee / tank | `Scenes/Characters/Spirit/GuardianSpirit.tscn` |
 | Channeler | Ranged / glass cannon | `Scenes/Characters/Spirit/ChannelerSpirit.tscn` |
-| Trickster | Agile disruptor | Planned; no scene or behavior yet |
+| Trickster | Agile disruptor | `Scenes/Characters/Spirit/TricksterSpirit.tscn` |
 
 These are working family names, not final creature names. Distraction is a command/ability rather than a family name. Evolution forms can later use `<Family>Form01.tscn`, `Form02`, and `Form03` without requiring separate behavior scripts for each form.
 
 Both existing family scenes inherit `SpiritBase.tscn`, which holds the common body, visuals references, and melee defaults. Guardian currently uses those defaults. Channeler attaches `ChannelerSpirit.cs`, a subclass of `SpiritBase`, so health, Brave, hesitation, and command responses remain shared. Only ranged positioning and projectile attacks differ.
 
-The game still contains a scene instance named `AllySpirit`; it now instances Channeler. To test Guardian, replace that instance with `GuardianSpirit.tscn` and retain the `AllySpirit` node name so Game and CombatEncounter references remain valid. Preserve the desired per-instance Brave/hesitation settings. There is no party-selection system yet.
+The game still contains a scene instance named `AllySpirit`; it now instances Trickster for the current prototype. To test another family, replace that instance with the desired family scene and retain the `AllySpirit` node name so Game and CombatEncounter references remain valid. Preserve the desired per-instance Brave/hesitation settings. There is no party-selection system yet.
 
 ## Channeler prototype rules
 
@@ -24,3 +24,10 @@ The game still contains a scene instance named `AllySpirit`; it now instances Ch
 - Player command delivery and its movement-upgrade hook apply to either family unchanged.
 
 This document is local project documentation, not an update to the Google GDD.
+
+## Trickster prototype rules
+
+- Fragile close-range disruptor: 18 health, 5 base damage, 8 movement speed, 3.1 attack range, 0.22-second windup, and 1-second cooldown. These are testing values.
+- After a successful hit it makes a short, readable sideways burst for 0.35 seconds at 9 movement speed, then re-engages. The burst is not a teleport, does not add damage, and does not clear hesitation.
+- Help me and Keep your distance retain their shared behavior. The burst is cancelled by defeat, stopping combat, encounter reset, or a command that cancels its pending attack.
+- Stealth, debuffs, back attacks, target swapping, and special distraction effects remain future decisions.

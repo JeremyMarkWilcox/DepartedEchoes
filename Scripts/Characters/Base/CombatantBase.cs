@@ -250,6 +250,7 @@ public partial class CombatantBase : DamageableActor
     protected void ApplyAttackDamage(DamageableActor target, float damage)
     {
         float healthBefore = target.Health;
+        target.RegisterAttacker(this);
         target.ApplyDamage(damage);
 
         // Defeat callbacks can stop the encounter synchronously. Do not revive hit feedback.

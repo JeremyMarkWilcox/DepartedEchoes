@@ -12,6 +12,7 @@ public partial class DamageableActor : ActorBase
     public float MaxHealth => _maxHealth;
     public bool IsDefeated => _isDefeated;
     public bool IsCombatActive => _isCombatActive;
+    public DamageableActor LastAttacker { get; private set; }
     public virtual bool IsDamageProtected => false;
     public event Action<DamageableActor> Defeated;
     public event Action<DamageableActor> HealthChanged;
@@ -22,10 +23,15 @@ public partial class DamageableActor : ActorBase
         _health = _maxHealth;
         _isDefeated = false;
         _isCombatActive = false;
+        LastAttacker = null;
         HealthChanged?.Invoke(this);
     }
     public virtual void StartCombat() { if (!_isDefeated) _isCombatActive = true; }
     public virtual void StopCombat() { _isCombatActive = false; }
+    public void RegisterAttacker(DamageableActor attacker)
+    {
+        if (attacker != null && attacker != this) LastAttacker = attacker;
+    }
     public void ApplyDamage(float amount)
     {
         if (!_isCombatActive || _isDefeated || IsDamageProtected || !float.IsFinite(amount) || amount <= 0) return;

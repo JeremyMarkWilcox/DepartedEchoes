@@ -1,15 +1,24 @@
+using System.Linq;
 using Godot;
 
 /// <summary>Pursuer with committed strikes and a temporary, earned distraction.</summary>
 public partial class EnemyBase : CombatantBase
 {
+    public enum TargetingMode { FixedTarget, Player, AllySpirit, Closest, LastAttacker, LowestHealth }
+    [ExportGroup("Targeting Prototype")]
+    [Export] public TargetingMode Targeting { get; set; } = TargetingMode.Player;
+    [Export(PropertyHint.Range, "0.2,10,0.1")] private float _targetCommitSeconds = 3.0f;
+    [Export] private bool _retargetAfterTargetDefeated = true;
     public enum AttackPhase { Pursue, Windup, Strike, Recovery }
     [Export] private float _strikeLength = 2.8f;
     [Export] private float _strikeWidth = 1.6f;
     [Export] private float _recoverySeconds = 0.9f;
     private const float StrikeSeconds = 0.12f;
     private float _phaseRemaining;
+    private float _targetCommitRemaining;
     private DamageableActor _primaryTarget;
+    private Player _playerTarget;
+    private SpiritBase _allyTarget;
     private SpiritBase _pendingDistraction, _distractionTarget;
     private float _pendingDistractionSeconds, _distractionRemaining;
     private Vector3 _strikeOrigin, _strikeForward;
@@ -53,6 +62,9 @@ public partial class EnemyBase : CombatantBase
     {
         base.ResetForEncounter(opponent);
         _primaryTarget = opponent;
+        _playerTarget = opponent as Player ?? GetParent()?.GetChildren().OfType<Player>().FirstOrDefault();
+        _allyTarget = GetParent()?.GetChildren().OfType<SpiritBase>().FirstOrDefault();
+        _target = SelectTarget(true);
         ClearAttack();
     }
 
@@ -78,13 +90,14 @@ public partial class EnemyBase : CombatantBase
     private void UpdateDistraction(float dt)
     {
         _distractionRemaining = Mathf.Max(0, _distractionRemaining - dt);
+        _targetCommitRemaining = Mathf.Max(0, _targetCommitRemaining - dt);
         if (!IsAvailable(_pendingDistraction)) _pendingDistraction = null;
         if (Phase != AttackPhase.Pursue) return;
 
         if (IsDistracted && (_distractionRemaining <= 0 || !IsAvailable(_distractionTarget)))
         {
             _distractionTarget = null;
-            _target = _primaryTarget;
+            _target = SelectTarget(true);
         }
         if (HasPendingDistraction)
         {
@@ -100,13 +113,15 @@ public partial class EnemyBase : CombatantBase
         Phase = AttackPhase.Pursue;
         _phaseRemaining = _pendingDistractionSeconds = _distractionRemaining = 0;
         _pendingDistraction = _distractionTarget = null;
-        _target = _primaryTarget;
+        if (!IsAvailable(_target) || _retargetAfterTargetDefeated) _target = SelectTarget(true);
         if (_telegraph != null) _telegraph.Visible = false;
         if (_phaseLabel != null) _phaseLabel.Visible = false;
     }
     protected override void TickCombat(float dt)
     {
         UpdateDistraction(dt);
+        if (Phase == AttackPhase.Pursue && !IsDistracted && _targetCommitRemaining <= 0)
+            _target = SelectTarget(false);
         // A fallen target does not cancel recovery or redirect a strike toward the player.
         // UpdateDistraction reacquires the player when this attack cycle reaches Pursue.
         if (!IsTargetValid() && Phase == AttackPhase.Pursue)
@@ -144,7 +159,11 @@ public partial class EnemyBase : CombatantBase
                     Phase = AttackPhase.Strike;
                     _phaseRemaining = StrikeSeconds;
                     // One hit test at the strike instant, not a homing or continuously damaging zone.
-                    if (IsTargetValid() && StrikeContains(_target)) _target.ApplyDamage(_attackDamage);
+                    if (IsTargetValid() && StrikeContains(_target))
+                    {
+                        _target.RegisterAttacker(this);
+                        _target.ApplyDamage(_attackDamage);
+                    }
                     if (!_isCombatActive) return; // Damage can synchronously end the encounter.
                 }
                 else if (Phase == AttackPhase.Strike) { Phase = AttackPhase.Recovery; _phaseRemaining = Mathf.Max(0.1f, _recoverySeconds); }
@@ -159,6 +178,41 @@ public partial class EnemyBase : CombatantBase
         _phaseLabel.Text = targetCue + "\n" + phaseCue;
         _phaseLabel.Modulate = IsDistracted ? new Color(0.5f, 0.85f, 1) : Colors.White;
         _phaseLabel.Visible = true;
+    }
+
+    private DamageableActor SelectTarget(bool force)
+    {
+        DamageableActor chosen = Targeting switch
+        {
+            TargetingMode.AllySpirit => _allyTarget,
+            TargetingMode.Closest => ClosestValidTarget(),
+            TargetingMode.LastAttacker => IsSelectable(LastAttacker) ? LastAttacker : _primaryTarget,
+            TargetingMode.LowestHealth => LowestHealthTarget(),
+            TargetingMode.FixedTarget => _primaryTarget,
+            _ => _playerTarget ?? _primaryTarget,
+        };
+        if (!IsSelectable(chosen)) chosen = FallbackTarget();
+        if (chosen != null && (force || !ReferenceEquals(chosen, _target)))
+            _targetCommitRemaining = Mathf.Max(0.1f, _targetCommitSeconds);
+        return chosen;
+    }
+
+    private DamageableActor ClosestValidTarget() => ValidCandidates()
+        .OrderBy(candidate => GlobalPosition.DistanceSquaredTo(candidate.GlobalPosition)).FirstOrDefault();
+
+    private DamageableActor LowestHealthTarget() => ValidCandidates()
+        .OrderBy(candidate => candidate.Health / Mathf.Max(candidate.MaxHealth, 0.01f)).FirstOrDefault();
+
+    private DamageableActor FallbackTarget() => IsSelectable(_playerTarget) ? _playerTarget
+        : IsSelectable(_allyTarget) ? _allyTarget : _primaryTarget;
+
+    private static bool IsSelectable(DamageableActor actor) => IsInstanceValid(actor)
+        && actor.IsInsideTree() && !actor.IsDefeated;
+
+    private System.Collections.Generic.IEnumerable<DamageableActor> ValidCandidates()
+    {
+        if (IsSelectable(_playerTarget)) yield return _playerTarget;
+        if (IsSelectable(_allyTarget) && !ReferenceEquals(_allyTarget, _playerTarget)) yield return _allyTarget;
     }
     public bool StrikeContains(DamageableActor actor)
     {
