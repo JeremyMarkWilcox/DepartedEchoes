@@ -105,6 +105,13 @@ command_help={
 ]
 }
 
+command_distance={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":69)
+, Object(InputEventJoypadButton,"button_index":2)
+]
+}
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

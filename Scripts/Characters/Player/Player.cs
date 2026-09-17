@@ -26,6 +26,19 @@ public partial class Player : DamageableActor
     private StandardMaterial3D _playerMaterial;
     private Vector3 _baselineScale = Vector3.One;
     public bool IsDodging => _dodgeRemaining > 0;
+
+    [ExportGroup("Command Delivery")]
+    /// <summary>Upgrade hook: permits walking during delivery, but never commanding during a dodge.</summary>
+    [Export] public bool CanCommandWhileMoving { get; set; } = false;
+    private bool _isDeliveringCommand;
+    public bool IsHeldForCommand => _isDeliveringCommand && !CanCommandWhileMoving;
+
+    /// <summary>Independent of encounter movement locks; releasing a call cannot unlock a transition.</summary>
+    public void SetCommandDeliveryActive(bool active)
+    {
+        _isDeliveringCommand = active;
+        if (IsHeldForCommand) Velocity = new Vector3(0, Velocity.Y, 0);
+    }
     public override bool IsDamageProtected => IsDodging &&
         _dodgeDuration - _dodgeRemaining >= _protectionStart &&
         _dodgeDuration - _dodgeRemaining < _protectionStart + Mathf.Max(0, _protectionDuration);
@@ -33,7 +46,7 @@ public partial class Player : DamageableActor
     public override void _UnhandledInput(InputEvent e)
     {
         if (!e.IsActionPressed("dodge", allowEcho: false)) return;
-        if (!_isCombatActive || !_isMovementEnabled || _isDefeated || IsDodging || _cooldownRemaining > 0 || !IsOnFloor()) return;
+        if (!_isCombatActive || !_isMovementEnabled || _isDeliveringCommand || _isDefeated || IsDodging || _cooldownRemaining > 0 || !IsOnFloor()) return;
         Vector3 direction = GetMoveDirection();
         if (direction.IsZeroApprox()) direction = _meshHolder != null ? -_meshHolder.GlobalBasis.Z : Vector3.Forward;
         direction.Y = 0;
@@ -51,6 +64,7 @@ public partial class Player : DamageableActor
     public override void StopCombat()
     {
         base.StopCombat();
+        SetCommandDeliveryActive(false);
         _dodgeRemaining = _cooldownRemaining = _hitRemaining = 0;
         Velocity = new Vector3(0, Velocity.Y, 0);
         RefreshPlayerVisuals();
@@ -137,6 +151,7 @@ public partial class Player : DamageableActor
         Vector3 planar = new Vector3(velocity.X, 0.0f, velocity.Z);
         float rate = desired.IsZeroApprox() ? _deceleration : _acceleration;
         planar = IsDodging ? _dodgeDirection * _dodgeSpeed : planar.MoveToward(desired, rate * dt);
+        if (IsHeldForCommand) planar = Vector3.Zero;
 
         velocity.X = planar.X;
         velocity.Z = planar.Z;
@@ -150,7 +165,7 @@ public partial class Player : DamageableActor
 
     private Vector3 GetMoveDirection()
     {
-        if (!_isMovementEnabled || _isDefeated)
+        if (!_isMovementEnabled || IsHeldForCommand || _isDefeated)
         {
             return Vector3.Zero;
         }

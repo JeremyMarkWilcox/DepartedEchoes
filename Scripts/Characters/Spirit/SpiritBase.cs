@@ -1,7 +1,7 @@
 using Godot;
 
 /// <summary>
-/// Autonomous attacks with one temporary response to the player's Help me request.
+/// Autonomous attacks with temporary responses to player commands.
 /// </summary>
 public partial class SpiritBase : CombatantBase
 {
@@ -15,9 +15,14 @@ public partial class SpiritBase : CombatantBase
     [Export(PropertyHint.Range, "1,5,1")] private int _maxConsecutiveHesitations = 2;
     [Export] public bool ShowDecisionDebug { get; set; } = true;
 
+    [ExportGroup("Brave Damage Prototype")]
+    [Export(PropertyHint.Range, "0,100,5")] public float BraveDamageBonusPercent { get; set; } = 10.0f;
+
     private readonly RandomNumberGenerator _willingnessRandom = new();
     private float _hesitationRemaining, _decisionFeedbackRemaining;
     private string _decisionFeedback = "";
+    private float _damageFeedbackRemaining;
+    private string _damageFeedback = "";
     public int ConsecutiveHesitations { get; private set; }
     public bool IsHesitating => _hesitationRemaining > 0;
 
@@ -48,7 +53,7 @@ public partial class SpiritBase : CombatantBase
 
     public bool TryAcceptHelp(EnemyBase enemy)
     {
-        if (!IsCombatActive || IsDefeated || IsRespondingToHelp || !IsTargetValid()
+        if (!IsCombatActive || IsDefeated || IsRespondingToHelp || IsKeepingDistance || !IsTargetValid()
             || enemy != _target || !enemy.CanAcceptDistraction) return false;
 
         CancelPendingAttack();
@@ -63,6 +68,7 @@ public partial class SpiritBase : CombatantBase
 
     public override void ResetForEncounter(DamageableActor opponent)
     {
+        ClearDistanceCommand();
         ClearHelp();
         ClearWillingness();
         base.ResetForEncounter(opponent);
@@ -70,6 +76,7 @@ public partial class SpiritBase : CombatantBase
 
     public override void StopCombat()
     {
+        ClearDistanceCommand();
         ClearHelp();
         ClearWillingness();
         base.StopCombat();
@@ -106,6 +113,12 @@ public partial class SpiritBase : CombatantBase
     {
         _hesitationRemaining = Mathf.Max(0, _hesitationRemaining - dt);
         _decisionFeedbackRemaining = Mathf.Max(0, _decisionFeedbackRemaining - dt);
+        _damageFeedbackRemaining = Mathf.Max(0, _damageFeedbackRemaining - dt);
+        if (IsKeepingDistance)
+        {
+            TickDistanceCommand(dt);
+            return;
+        }
         if (!IsRespondingToHelp)
         {
             _feedbackRemaining = Mathf.Max(0, _feedbackRemaining - dt);
@@ -163,6 +176,22 @@ public partial class SpiritBase : CombatantBase
         }
     }
 
+    // Recalculate from authored damage for each hit; the bonus never compounds across attacks.
+    protected override float GetAttackDamage()
+    {
+        float bonus = BraveEnabled && float.IsFinite(BraveDamageBonusPercent)
+            ? Mathf.Clamp(BraveDamageBonusPercent, 0, 100) : 0;
+        return base.GetAttackDamage() * (1 + bonus / 100);
+    }
+
+    protected override void OnAttackLanded(float attackDamage, float damageDealt)
+    {
+        if (attackDamage <= _attackDamage) return;
+        float bonus = (attackDamage / _attackDamage - 1) * 100;
+        _damageFeedback = $"Brave +{bonus:0.#}%: {damageDealt:0.#} damage";
+        _damageFeedbackRemaining = 1.0f;
+    }
+
     protected override bool ShouldCommitAttack()
     {
         if (IsHesitating) return false;
@@ -201,6 +230,8 @@ public partial class SpiritBase : CombatantBase
         _hesitationRemaining = _decisionFeedbackRemaining = 0;
         ConsecutiveHesitations = 0;
         _decisionFeedback = "";
+        _damageFeedbackRemaining = 0;
+        _damageFeedback = "";
     }
 
     public override void _PhysicsProcess(double delta)
@@ -218,7 +249,8 @@ public partial class SpiritBase : CombatantBase
             return;
         }
 
-        string intention = IsRespondingToHelp ? $"Help me: {CurrentHelpPhase}"
+        string intention = IsKeepingDistance ? DistanceFeedback
+            : IsRespondingToHelp ? $"Help me: {CurrentHelpPhase}"
             : !IsTargetValid() ? "No target"
             : IsWindingUp ? "Attacking"
             : !IsInAttackRange(_target) ? "Approaching"
@@ -226,16 +258,19 @@ public partial class SpiritBase : CombatantBase
             : IsAttackCoolingDown ? "Recovering" : "Ready";
 
         // Gameplay cues remain when the optional technical decision display is hidden.
-        string text = !string.IsNullOrEmpty(HelpFeedback) ? HelpFeedback
+        string text = IsKeepingDistance ? DistanceFeedback
+            : !string.IsNullOrEmpty(HelpFeedback) ? HelpFeedback
             : IsHesitating && IsTargetValid() && IsInAttackRange(_target) ? "Hesitating..." : "";
         if (ShowDecisionDebug)
         {
             text = $"{(BraveEnabled ? "Brave" : "Baseline")} | {intention}";
-            if (IsRespondingToHelp || !string.IsNullOrEmpty(HelpFeedback)) text += "\n" + HelpFeedback;
+            if (!IsKeepingDistance && (IsRespondingToHelp || !string.IsNullOrEmpty(HelpFeedback))) text += "\n" + HelpFeedback;
             else if (_decisionFeedbackRemaining > 0) text += "\n" + _decisionFeedback;
+            if (_damageFeedbackRemaining > 0) text += "\n" + _damageFeedback;
             if (ConsecutiveHesitations > 0)
                 text += $"\nHesitations: {ConsecutiveHesitations}/{Mathf.Max(1, _maxConsecutiveHesitations)}";
         }
+        if (IsKeepingDistance && IsHesitating) text += "\nHesitating...";
         if (_helpLabel.Text != text) _helpLabel.Text = text;
         _helpLabel.Visible = !string.IsNullOrEmpty(text);
     }

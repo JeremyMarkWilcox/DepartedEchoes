@@ -240,8 +240,22 @@ public partial class CombatantBase : DamageableActor
             return;
         }
 
-        _target.ApplyDamage(_attackDamage);
+        DamageableActor target = _target;
+        float healthBefore = target.Health;
+        float damage = GetAttackDamage();
+        target.ApplyDamage(damage);
+
+        // Defeat callbacks can stop the encounter synchronously. Do not revive hit feedback.
+        if (_isCombatActive && !_isDefeated && IsInstanceValid(target))
+        {
+            float dealt = healthBefore - target.Health;
+            if (dealt > 0) OnAttackLanded(damage, dealt);
+        }
     }
+
+    protected virtual float GetAttackDamage() => _attackDamage;
+
+    protected virtual void OnAttackLanded(float attackDamage, float damageDealt) { }
 
     protected void MoveTowardTarget(float distance, float stopDistance, float dt)
     {
@@ -265,6 +279,17 @@ public partial class CombatantBase : DamageableActor
         velocity.X = direction.X * speed;
         velocity.Z = direction.Z * speed;
         Velocity = velocity;
+    }
+
+    protected void MoveAwayFromTarget(float remainingDistance, float dt)
+    {
+        Vector3 away = GlobalPosition - _target.GlobalPosition;
+        away.Y = 0;
+        // Deterministic escape direction even if the two bodies start overlapped.
+        if (away.LengthSquared() < 0.0001f) away = Vector3.Right;
+        float speed = dt > 0 ? Mathf.Min(_moveSpeed, Mathf.Max(0, remainingDistance) / dt) : 0;
+        Vector3 movement = away.Normalized() * speed;
+        Velocity = new Vector3(movement.X, Velocity.Y, movement.Z);
     }
 
     private void ApplyGravity(float dt)

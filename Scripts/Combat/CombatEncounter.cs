@@ -41,6 +41,20 @@ public partial class CombatEncounter : Node3D
     public bool IsHelpInProgress => _allySpirit?.IsRespondingToHelp == true
         || _enemySpirit?.HasPendingDistraction == true || _enemySpirit?.IsDistracted == true;
 
+    [ExportGroup("Keep Your Distance")]
+    [Export(PropertyHint.Range, "1,30,0.5")] private float _distanceCooldownSeconds = 8.0f;
+    private float _distanceCooldownRemaining, _distanceNoticeRemaining;
+    private string _distanceNotice = "";
+    public float DistanceCooldownRemaining => _distanceCooldownRemaining;
+
+    [ExportGroup("Command Delivery")]
+    [Export(PropertyHint.Range, "0,2,0.05")] public float CommandDeliverySeconds { get; set; } = 0.5f;
+    private enum PlayerCommand { None, Help, Distance }
+    private PlayerCommand _pendingCommand;
+    private float _commandDeliveryRemaining;
+    public bool IsDeliveringCommand => _pendingCommand != PlayerCommand.None;
+    public float CommandDeliveryRemaining => _commandDeliveryRemaining;
+
     [ExportGroup("Encounter Timing")]
     /// <summary>How long the Ready banner is held before Combat begins.</summary>
     [Export(PropertyHint.Range, "0.1,5,0.1")] private float _readyDurationSeconds = 1.5f;
@@ -87,6 +101,7 @@ public partial class CombatEncounter : Node3D
     /// every actor reports an entry on the first physics step.
     /// </summary>
     private int _physicsFramesUntilArmed = 2;
+    private bool _triggerArmed;
 
     public override void _Ready()
     {
@@ -118,6 +133,7 @@ public partial class CombatEncounter : Node3D
 
     public override void _ExitTree()
     {
+        ClearCommandDelivery();
         if (_cameraRig != null)
         {
             _cameraRig.BlendCompleted -= OnCameraBlendCompleted;
@@ -158,6 +174,8 @@ public partial class CombatEncounter : Node3D
         {
             _helpCooldownRemaining = Mathf.Max(0, _helpCooldownRemaining - (float)delta);
             _helpNoticeRemaining = Mathf.Max(0, _helpNoticeRemaining - (float)delta);
+            _distanceCooldownRemaining = Mathf.Max(0, _distanceCooldownRemaining - (float)delta);
+            _distanceNoticeRemaining = Mathf.Max(0, _distanceNoticeRemaining - (float)delta);
             string response = _enemySpirit.IsDistracted ? "Enemy targeting ally"
                 : _enemySpirit.HasPendingDistraction ? "Distraction earned - waiting for attack to finish"
                 : _allySpirit.HelpFeedback;
@@ -166,8 +184,18 @@ public partial class CombatEncounter : Node3D
             if (allyDown) response = "Ally down - keep moving!";
             string availability = allyDown ? "Unavailable"
                 : _helpCooldownRemaining > 0 ? $"{Mathf.CeilToInt(_helpCooldownRemaining)}s"
-                : IsHelpInProgress ? "In progress" : "Ready";
-            _gameHud?.SetHelpStatus($"Help me [Q / Y]: {availability}\n{response}");
+                : IsHelpInProgress ? "In progress"
+                : _allySpirit.IsKeepingDistance ? "Ally busy" : "Ready";
+            string distanceAvailability = allyDown ? "Unavailable"
+                : _allySpirit.IsKeepingDistance ? "In progress"
+                : _distanceCooldownRemaining > 0 ? $"{Mathf.CeilToInt(_distanceCooldownRemaining)}s"
+                : _allySpirit.IsRespondingToHelp ? "Ally busy" : "Ready";
+            string distanceResponse = allyDown ? ""
+                : _distanceNoticeRemaining > 0 ? _distanceNotice : _allySpirit.DistanceFeedback;
+            if (_pendingCommand == PlayerCommand.Help) response = "Calling: Help me!";
+            if (_pendingCommand == PlayerCommand.Distance) distanceResponse = "Calling: Keep your distance!";
+            _gameHud?.SetHelpStatus($"Help me [Q / Y]: {availability}\n{response}\n"
+                + $"Keep your distance [E / X]: {distanceAvailability}\n{distanceResponse}");
         }
         else
         {
@@ -192,6 +220,8 @@ public partial class CombatEncounter : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
+        TickCommandDelivery((float)delta);
+        if (_triggerArmed || _battleTrigger == null) return;
         if (_physicsFramesUntilArmed > 0)
         {
             _physicsFramesUntilArmed--;
@@ -199,11 +229,17 @@ public partial class CombatEncounter : Node3D
         }
 
         _battleTrigger.BodyEntered += OnBattleTriggerBodyEntered;
-        SetPhysicsProcess(false);
+        _triggerArmed = true;
     }
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (@event.IsActionPressed("command_distance", allowEcho: false))
+        {
+            GetViewport().SetInputAsHandled();
+            TryRequestKeepDistance();
+            return;
+        }
         if (@event.IsActionPressed("command_help", allowEcho: false))
         {
             GetViewport().SetInputAsHandled();
@@ -223,8 +259,10 @@ public partial class CombatEncounter : Node3D
         EndEncounter();
     }
 
-    /// <summary>Only the initial request checks player proximity; retreat remains allowed.</summary>
-    public bool TryRequestHelp()
+    public bool TryRequestHelp() => RequestHelp(deliver: false);
+
+    /// <summary>Validate at request and delivery; once received, the spirit may pursue the threat.</summary>
+    private bool RequestHelp(bool deliver)
     {
         if (State != EncounterState.Combat || !_player.IsCombatActive || _player.IsDefeated) return false;
         if (_allySpirit.IsDefeated || !_allySpirit.IsCombatActive)
@@ -235,6 +273,11 @@ public partial class CombatEncounter : Node3D
         if (IsHelpInProgress)
         {
             ShowHelpNotice("Already helping");
+            return false;
+        }
+        if (_allySpirit.IsKeepingDistance)
+        {
+            ShowHelpNotice("Ally is keeping distance");
             return false;
         }
         if (_helpCooldownRemaining > 0)
@@ -248,6 +291,7 @@ public partial class CombatEncounter : Node3D
             ShowHelpNotice("No nearby threat");
             return false;
         }
+        if (!deliver) return BeginCommandDelivery(PlayerCommand.Help);
         if (!_allySpirit.TryAcceptHelp(_enemySpirit))
         {
             ShowHelpNotice("Ally unavailable");
@@ -255,6 +299,25 @@ public partial class CombatEncounter : Node3D
         }
         _helpCooldownRemaining = Mathf.Max(0.1f, _helpCooldownSeconds);
         ShowHelpNotice("Help requested - ally responding");
+        return true;
+    }
+
+    public bool TryRequestKeepDistance() => RequestKeepDistance(deliver: false);
+
+    private bool RequestKeepDistance(bool deliver)
+    {
+        if (State != EncounterState.Combat || !_player.IsCombatActive || _player.IsDefeated) return false;
+        string rejection = _allySpirit.IsDefeated || !_allySpirit.IsCombatActive ? "Ally unavailable"
+            : _allySpirit.IsKeepingDistance ? "Already keeping distance"
+            : _allySpirit.IsRespondingToHelp ? "Ally is helping"
+            : _distanceCooldownRemaining > 0 ? "Distance command is recharging" : "";
+        if (rejection == "" && (!_enemySpirit.IsCombatActive || _enemySpirit.IsDefeated)) rejection = "No active threat";
+        if (rejection == "" && !deliver) return BeginCommandDelivery(PlayerCommand.Distance);
+        if (rejection == "" && !_allySpirit.TryAcceptKeepDistance()) rejection = "No active threat";
+        _distanceNotice = rejection == "" ? "Distance requested - ally responding" : rejection;
+        _distanceNoticeRemaining = 1.2f;
+        if (rejection != "") return false;
+        _distanceCooldownRemaining = Mathf.Max(0.1f, _distanceCooldownSeconds);
         return true;
     }
 
@@ -266,8 +329,11 @@ public partial class CombatEncounter : Node3D
 
     private void ClearHelpCommand()
     {
+        ClearCommandDelivery();
         _helpCooldownRemaining = _helpNoticeRemaining = 0;
         _helpNotice = "";
+        _distanceCooldownRemaining = _distanceNoticeRemaining = 0;
+        _distanceNotice = "";
         _gameHud?.SetHelpStatus("");
     }
 

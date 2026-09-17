@@ -31,7 +31,7 @@ _combatEncounter = NodePath("CombatEncounter")
 
 [node name="AllySpirit" parent="ActorContainer" unique_id=934341465 instance=ExtResource("3_ln2h6")]
 BraveEnabled = false
-_hesitationSeconds = 3.0
+_hesitationSeconds = 2.0
 
 [node name="EnemySpirit" parent="ActorContainer" unique_id=1602521484 instance=ExtResource("4_enemy")]
 
