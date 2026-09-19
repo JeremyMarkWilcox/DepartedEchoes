@@ -172,10 +172,15 @@ public partial class EnemyBase : CombatantBase
         }
         _telegraph.Visible = Phase == AttackPhase.Windup || Phase == AttackPhase.Strike;
         _telegraphMaterial.AlbedoColor = Phase == AttackPhase.Strike ? new Color(1, 0.15f, 0.1f, 0.75f) : new Color(1, 0.65f, 0.05f, 0.5f);
-        string targetCue = IsDistracted ? "TARGET: ALLY" : "TARGET: PLAYER";
+        string targetName = ReferenceEquals(_target, _playerTarget) ? "PLAYER"
+            : ReferenceEquals(_target, _allyTarget) ? "ALLY" : "NONE";
+        string targetCue = IsDistracted ? "TARGET: ALLY (DISTRACTED)" : $"TARGET: {targetName}";
+        string modeCue = $"MODE: {Targeting}";
+        string commitmentCue = _targetCommitRemaining > 0
+            ? $"LOCK: {_targetCommitRemaining:0.0}s" : "RECONSIDER READY";
         string phaseCue = Phase == AttackPhase.Windup ? "WINDUP !" : Phase == AttackPhase.Strike ? "STRIKE" :
             Phase == AttackPhase.Recovery ? "RECOVER" : "PURSUING";
-        _phaseLabel.Text = targetCue + "\n" + phaseCue;
+        _phaseLabel.Text = targetCue + "\n" + modeCue + "\n" + commitmentCue + "\n" + phaseCue;
         _phaseLabel.Modulate = IsDistracted ? new Color(0.5f, 0.85f, 1) : Colors.White;
         _phaseLabel.Visible = true;
     }

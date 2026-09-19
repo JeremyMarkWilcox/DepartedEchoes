@@ -131,6 +131,23 @@ public partial class CombatEncounter : Node3D
         _gameHud?.HideResult();
     }
 
+    /// <summary>
+    /// Rebinds the ally after Game selects a family scene before the parent is ready. The
+    /// encounter scene may already have resolved its exported NodePath to the authored placeholder.
+    /// </summary>
+    public void RebindAllySpirit(SpiritBase allySpirit)
+    {
+        if (allySpirit == null || allySpirit == _allySpirit)
+        {
+            return;
+        }
+
+        UnsubscribeFromCombatant(_allySpirit);
+        _allySpirit = allySpirit;
+        SubscribeToCombatant(_allySpirit);
+        _framingTargets = new ActorBase[] { _player, _allySpirit, _enemySpirit };
+    }
+
     public override void _ExitTree()
     {
         ClearCommandDelivery();

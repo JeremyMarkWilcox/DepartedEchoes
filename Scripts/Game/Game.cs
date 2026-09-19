@@ -2,6 +2,14 @@ using Godot;
 
 public partial class Game : Node3D
 {
+    public enum AllyFamily { UseCurrentScene, Guardian, Channeler, Trickster }
+
+    [ExportGroup("Spirit Family Testing")]
+    [Export] private AllyFamily _allyFamily = AllyFamily.UseCurrentScene;
+    [Export] private PackedScene _guardianSpiritScene = null!;
+    [Export] private PackedScene _channelerSpiritScene = null!;
+    [Export] private PackedScene _tricksterSpiritScene = null!;
+
     [Export] private Player _player = null!;
     [Export] private CameraRig _cameraRig = null!;
     [Export] private Marker3D _playerSpawn = null!;
@@ -12,8 +20,14 @@ public partial class Game : Node3D
     [Export] private GameHud _gameHud = null!;
     [Export] private CombatEncounter _combatEncounter = null!;
 
+    public override void _EnterTree()
+    {
+        SwapConfiguredAllyFamily();
+    }
+
     public override void _Ready()
     {
+        _combatEncounter?.RebindAllySpirit(_allySpirit);
         PlaceActorAtSpawn(_player, _playerSpawn, "Player");
         PlaceActorAtSpawn(_allySpirit, _allySpiritStart, "AllySpirit");
         PlaceActorAtSpawn(_enemySpirit, _enemySpiritStart, "EnemySpirit");
@@ -28,6 +42,44 @@ public partial class Game : Node3D
         }
 
         Input.MouseMode = Input.MouseModeEnum.Captured;
+    }
+
+    private void SwapConfiguredAllyFamily()
+    {
+        PackedScene selectedScene = _allyFamily switch
+        {
+            AllyFamily.Guardian => _guardianSpiritScene,
+            AllyFamily.Channeler => _channelerSpiritScene,
+            AllyFamily.Trickster => _tricksterSpiritScene,
+            _ => null,
+        };
+
+        if (selectedScene == null)
+        {
+            return;
+        }
+
+        Node3D actorContainer = GetNodeOrNull<Node3D>("ActorContainer");
+        Node oldAlly = actorContainer?.GetNodeOrNull("AllySpirit");
+        if (actorContainer == null || oldAlly == null)
+        {
+            GD.PushWarning("Game: cannot swap ally family; ActorContainer/AllySpirit is missing.");
+            return;
+        }
+
+        Node replacement = selectedScene.Instantiate();
+        replacement.Name = "AllySpirit";
+        int childIndex = oldAlly.GetIndex();
+        actorContainer.RemoveChild(oldAlly);
+        oldAlly.Free();
+        actorContainer.AddChild(replacement);
+        actorContainer.MoveChild(replacement, childIndex);
+
+        _allySpirit = replacement as SpiritBase;
+        if (_allySpirit == null)
+        {
+            GD.PushError($"Game: selected ally scene '{selectedScene.ResourcePath}' is not a SpiritBase.");
+        }
     }
 
     public override void _ExitTree()

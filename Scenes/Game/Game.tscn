@@ -3,9 +3,11 @@
 [ext_resource type="Script" uid="uid://kkaml42l40ls" path="res://Scripts/Game/Game.cs" id="1_rdw05"]
 [ext_resource type="PackedScene" uid="uid://c6o7q5wlvco23" path="res://Scenes/Levels/PrototypeLevel.tscn" id="2_1q8bt"]
 [ext_resource type="PackedScene" uid="uid://t48gn1hsfpdf" path="res://Scenes/Characters/Player/Player.tscn" id="2_xbxml"]
-[ext_resource type="PackedScene" path="res://Scenes/Characters/Spirit/TricksterSpirit.tscn" id="3_ln2h6"]
 [ext_resource type="PackedScene" path="res://Scenes/Characters/Enemy/EnemyBase.tscn" id="4_enemy"]
 [ext_resource type="PackedScene" uid="uid://c7ghqtvdrlyy6" path="res://Scenes/Camera/CameraRig.tscn" id="5_gvja8"]
+[ext_resource type="PackedScene" path="res://Scenes/Characters/Spirit/ChannelerSpirit.tscn" id="6_3586x"]
+[ext_resource type="PackedScene" path="res://Scenes/Characters/Spirit/GuardianSpirit.tscn" id="8_guardian"]
+[ext_resource type="PackedScene" path="res://Scenes/Characters/Spirit/TricksterSpirit.tscn" id="9_trickster"]
 [ext_resource type="PackedScene" uid="uid://l7tuxlqlubtf" path="res://Scenes/Combat/CombatEncounter.tscn" id="6_m1o7v"]
 [ext_resource type="PackedScene" uid="uid://gjkam268r7db" path="res://Scenes/Ui/Game Hud/GameHUD.tscn" id="7_3586x"]
 
@@ -20,6 +22,9 @@ _enemySpirit = NodePath("ActorContainer/EnemySpirit")
 _enemySpiritStart = NodePath("LevelContainer/PrototypeLevel/EnemySpiritStart")
 _gameHud = NodePath("GameHud")
 _combatEncounter = NodePath("CombatEncounter")
+_guardianSpiritScene = ExtResource("8_guardian")
+_channelerSpiritScene = ExtResource("6_3586x")
+_tricksterSpiritScene = ExtResource("9_trickster")
 
 [node name="LevelContainer" type="Node3D" parent="." unique_id=1609627590]
 
@@ -29,11 +34,10 @@ _combatEncounter = NodePath("CombatEncounter")
 
 [node name="Player" parent="ActorContainer" unique_id=2028128879 instance=ExtResource("2_xbxml")]
 
-[node name="AllySpirit" parent="ActorContainer" unique_id=934341465 instance=ExtResource("3_ln2h6")]
-BraveEnabled = false
-_hesitationSeconds = 2.0
-_attackCooldownSeconds = 0.5
-_attackWindupSeconds = 0.05
+[node name="AllySpirit" parent="ActorContainer" unique_id=726216088 instance=ExtResource("6_3586x")]
+_preferredDistance = 6.0
+_projectileSpeed = 12.0
+_projectileLifetime = 2.0
 
 [node name="EnemySpirit" parent="ActorContainer" unique_id=1602521484 instance=ExtResource("4_enemy")]
 Targeting = 2
