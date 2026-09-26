@@ -9,19 +9,36 @@ public partial class EnemyBase : CombatantBase
     [Export] public TargetingMode Targeting { get; set; } = TargetingMode.Player;
     [Export(PropertyHint.Range, "0.2,10,0.1")] private float _targetCommitSeconds = 3.0f;
     [Export] private bool _retargetAfterTargetDefeated = true;
-    public enum AttackPhase { Pursue, Windup, Strike, Recovery }
-    [Export] private float _strikeLength = 2.8f;
-    [Export] private float _strikeWidth = 1.6f;
-    [Export] private float _recoverySeconds = 0.9f;
+    public enum AttackPhase { Pursue, Windup, Strike, Recovery, Staggered }
+    [Export] protected float _strikeLength = 2.8f;
+    [Export] protected float _strikeWidth = 1.6f;
+    [Export] protected float _recoverySeconds = 0.9f;
     private const float StrikeSeconds = 0.12f;
     private float _phaseRemaining;
     private float _targetCommitRemaining;
     private DamageableActor _primaryTarget;
     private Player _playerTarget;
-    private SpiritBase _allyTarget;
+    private SpiritBase[] _allies = System.Array.Empty<SpiritBase>();
+
+    public void SetCandidates(Player player, SpiritBase[] allies)
+    {
+        _playerTarget = player;
+        _allies = allies;
+    }
     private SpiritBase _pendingDistraction, _distractionTarget;
     private float _pendingDistractionSeconds, _distractionRemaining;
     private Vector3 _strikeOrigin, _strikeForward;
+    private bool _strikeHit;
+    protected virtual float AttackStartDistance => _strikeLength * 0.8f;
+    protected virtual float StrikeLength => _strikeLength;
+    protected virtual float StrikeWidth => _strikeWidth;
+    protected virtual float WindupSeconds => _attackWindupSeconds;
+    protected virtual float ActiveSeconds => StrikeSeconds;
+    protected virtual float RecoverySeconds => _recoverySeconds;
+    protected virtual string AttackName => "ATTACK";
+    protected virtual bool MovingStrike => false;
+    protected virtual void PrepareAttack() { }
+    protected virtual Vector3 StrikeVelocity(float dt) => Vector3.Zero;
     private MeshInstance3D _telegraph;
     private StandardMaterial3D _telegraphMaterial;
     private Label3D _phaseLabel;
@@ -33,6 +50,26 @@ public partial class EnemyBase : CombatantBase
     public bool CanAcceptDistraction => IsCombatActive && !IsDefeated
         && !HasPendingDistraction && !IsDistracted;
     public override bool IsWindingUp => _isCombatActive && Phase == AttackPhase.Windup;
+    public bool IsStaggered => _isCombatActive && Phase == AttackPhase.Staggered;
+
+    /// <summary>Interrupts the current action without dealing damage or stacking stun timers.</summary>
+    public bool TryStagger(Player source, float seconds)
+    {
+        if (!IsAvailable(source) || !IsCombatActive || IsDefeated || IsStaggered
+            || !float.IsFinite(seconds) || seconds <= 0) return false;
+        RegisterAttacker(source);
+        CancelPendingAttack();
+        Phase = AttackPhase.Staggered;
+        _phaseRemaining = seconds;
+        _strikeHit = true;
+        _targetCommitRemaining = 0;
+        Velocity = new Vector3(0, Velocity.Y, 0);
+        _telegraph.Visible = false;
+        _phaseLabel.Text = "STAGGERED";
+        _phaseLabel.Modulate = new Color(0.3f, 1, 1);
+        _phaseLabel.Visible = true;
+        return true;
+    }
     public override void _Ready()
     {
         base._Ready();
@@ -62,8 +99,7 @@ public partial class EnemyBase : CombatantBase
     {
         base.ResetForEncounter(opponent);
         _primaryTarget = opponent;
-        _playerTarget = opponent as Player ?? GetParent()?.GetChildren().OfType<Player>().FirstOrDefault();
-        _allyTarget = GetParent()?.GetChildren().OfType<SpiritBase>().FirstOrDefault();
+        _playerTarget = opponent as Player ?? _playerTarget;
         _target = SelectTarget(true);
         ClearAttack();
     }
@@ -111,6 +147,7 @@ public partial class EnemyBase : CombatantBase
     private void ClearAttack()
     {
         Phase = AttackPhase.Pursue;
+        _strikeHit = false;
         _phaseRemaining = _pendingDistractionSeconds = _distractionRemaining = 0;
         _pendingDistraction = _distractionTarget = null;
         if (!IsAvailable(_target) || _retargetAfterTargetDefeated) _target = SelectTarget(true);
@@ -120,6 +157,13 @@ public partial class EnemyBase : CombatantBase
     protected override void TickCombat(float dt)
     {
         UpdateDistraction(dt);
+        if (Phase == AttackPhase.Staggered)
+        {
+            Velocity = new Vector3(0, Velocity.Y, 0);
+            _phaseRemaining -= dt;
+            if (_phaseRemaining <= 0) Phase = AttackPhase.Pursue;
+            return;
+        }
         if (Phase == AttackPhase.Pursue && !IsDistracted && _targetCommitRemaining <= 0)
             _target = SelectTarget(false);
         // A fallen target does not cancel recovery or redirect a strike toward the player.
@@ -134,16 +178,19 @@ public partial class EnemyBase : CombatantBase
         {
             FaceTarget();
             float distance = PlanarDistanceTo(_target);
-            if (distance <= _strikeLength * 0.8f)
+            if (distance <= AttackStartDistance)
             {
+                PrepareAttack();
+                _strikeHit = false;
                 Velocity = new Vector3(0, Velocity.Y, 0);
                 _strikeOrigin = GlobalPosition;
                 _strikeForward = _target.GlobalPosition - GlobalPosition;
                 _strikeForward.Y = 0;
                 _strikeForward = _strikeForward.IsZeroApprox() ? Vector3.Forward : _strikeForward.Normalized();
                 Phase = AttackPhase.Windup;
-                _phaseRemaining = Mathf.Max(0.1f, _attackWindupSeconds);
-                _telegraph.GlobalPosition = _strikeOrigin + _strikeForward * (_strikeLength / 2) - Vector3.Up * (CollisionHalfHeight - 0.04f);
+                _phaseRemaining = Mathf.Max(0.1f, WindupSeconds);
+                ((BoxMesh)_telegraph.Mesh).Size = new Vector3(StrikeWidth, 0.035f, StrikeLength);
+                _telegraph.GlobalPosition = _strikeOrigin + _strikeForward * (StrikeLength / 2) - Vector3.Up * (CollisionHalfHeight - 0.04f);
                 _telegraph.GlobalRotation = new Vector3(0, _facingYaw, 0);
             }
             else MoveTowardTarget(distance, ContactDistanceTo(_target), dt);
@@ -151,47 +198,74 @@ public partial class EnemyBase : CombatantBase
         else
         {
             Velocity = new Vector3(0, Velocity.Y, 0);
+            if (Phase == AttackPhase.Strike && MovingStrike)
+            {
+                Vector3 movement = StrikeVelocity(Mathf.Min(dt, Mathf.Max(0, _phaseRemaining)));
+                Velocity = new Vector3(movement.X, Velocity.Y, movement.Z);
+            }
             _phaseRemaining -= dt;
             if (_phaseRemaining <= 0)
             {
                 if (Phase == AttackPhase.Windup)
                 {
                     Phase = AttackPhase.Strike;
-                    _phaseRemaining = StrikeSeconds;
+                    _phaseRemaining = Mathf.Max(0.05f, ActiveSeconds);
                     // One hit test at the strike instant, not a homing or continuously damaging zone.
-                    if (IsTargetValid() && StrikeContains(_target))
+                    if (!MovingStrike && IsTargetValid() && StrikeContains(_target))
                     {
+                        _strikeHit = true;
                         _target.RegisterAttacker(this);
                         _target.ApplyDamage(_attackDamage);
                     }
                     if (!_isCombatActive) return; // Damage can synchronously end the encounter.
                 }
-                else if (Phase == AttackPhase.Strike) { Phase = AttackPhase.Recovery; _phaseRemaining = Mathf.Max(0.1f, _recoverySeconds); }
+                else if (Phase == AttackPhase.Strike) { Phase = AttackPhase.Recovery; _phaseRemaining = Mathf.Max(0.1f, RecoverySeconds); }
                 else Phase = AttackPhase.Pursue;
             }
         }
         _telegraph.Visible = Phase == AttackPhase.Windup || Phase == AttackPhase.Strike;
         _telegraphMaterial.AlbedoColor = Phase == AttackPhase.Strike ? new Color(1, 0.15f, 0.1f, 0.75f) : new Color(1, 0.65f, 0.05f, 0.5f);
         string targetName = ReferenceEquals(_target, _playerTarget) ? "PLAYER"
-            : ReferenceEquals(_target, _allyTarget) ? "ALLY" : "NONE";
+            : _target is SpiritBase ? $"ALLY ({_target.Name})" : "NONE";
         string targetCue = IsDistracted ? "TARGET: ALLY (DISTRACTED)" : $"TARGET: {targetName}";
         string modeCue = $"MODE: {Targeting}";
         string commitmentCue = _targetCommitRemaining > 0
             ? $"LOCK: {_targetCommitRemaining:0.0}s" : "RECONSIDER READY";
         string phaseCue = Phase == AttackPhase.Windup ? "WINDUP !" : Phase == AttackPhase.Strike ? "STRIKE" :
             Phase == AttackPhase.Recovery ? "RECOVER" : "PURSUING";
-        _phaseLabel.Text = targetCue + "\n" + modeCue + "\n" + commitmentCue + "\n" + phaseCue;
+        _phaseLabel.Text = targetCue + "\n" + modeCue + "\n" + commitmentCue + "\n" + AttackName + ": " + phaseCue;
         _phaseLabel.Modulate = IsDistracted ? new Color(0.5f, 0.85f, 1) : Colors.White;
         _phaseLabel.Visible = true;
+    }
+
+    public override void _PhysicsProcess(double delta)
+    {
+        // Moving attacks hit only after actual collision-aware movement, never at the distant
+        // end of the warning rectangle. Walls and bodies stop the lunge through MoveAndSlide.
+        base._PhysicsProcess(delta);
+        if (!IsCombatActive || IsDefeated || !MovingStrike || Phase != AttackPhase.Strike || _strikeHit || !IsTargetValid()) return;
+        Vector3 offset = _target.GlobalPosition - GlobalPosition;
+        float radius = CollisionRadius + _target.CollisionRadius + 0.15f;
+        if (Mathf.Abs(offset.Y) > CollisionHalfHeight + _target.CollisionHalfHeight) return;
+        offset.Y = 0;
+        if (offset.Dot(_strikeForward) < 0 || offset.LengthSquared() > radius * radius) return;
+        var query = PhysicsRayQueryParameters3D.Create(GlobalPosition, _target.GlobalPosition,
+            uint.MaxValue, new Godot.Collections.Array<Rid> { GetRid() });
+        query.HitFromInside = true;
+        var obstruction = GetWorld3D().DirectSpaceState.IntersectRay(query);
+        if (obstruction.Count > 0 && obstruction["collider"].AsGodotObject() != _target) return;
+        _strikeHit = true;
+        _target.RegisterAttacker(this);
+        _target.ApplyDamage(_attackDamage);
     }
 
     private DamageableActor SelectTarget(bool force)
     {
         DamageableActor chosen = Targeting switch
         {
-            TargetingMode.AllySpirit => _allyTarget,
+            TargetingMode.AllySpirit => _allies.FirstOrDefault(IsSelectable),
             TargetingMode.Closest => ClosestValidTarget(),
-            TargetingMode.LastAttacker => IsSelectable(LastAttacker) ? LastAttacker : _primaryTarget,
+            TargetingMode.LastAttacker => ValidCandidates().Contains(LastAttacker) ? LastAttacker : _primaryTarget,
             TargetingMode.LowestHealth => LowestHealthTarget(),
             TargetingMode.FixedTarget => _primaryTarget,
             _ => _playerTarget ?? _primaryTarget,
@@ -209,7 +283,7 @@ public partial class EnemyBase : CombatantBase
         .OrderBy(candidate => candidate.Health / Mathf.Max(candidate.MaxHealth, 0.01f)).FirstOrDefault();
 
     private DamageableActor FallbackTarget() => IsSelectable(_playerTarget) ? _playerTarget
-        : IsSelectable(_allyTarget) ? _allyTarget : _primaryTarget;
+        : _allies.FirstOrDefault(IsSelectable);
 
     private static bool IsSelectable(DamageableActor actor) => IsInstanceValid(actor)
         && actor.IsInsideTree() && !actor.IsDefeated;
@@ -217,7 +291,8 @@ public partial class EnemyBase : CombatantBase
     private System.Collections.Generic.IEnumerable<DamageableActor> ValidCandidates()
     {
         if (IsSelectable(_playerTarget)) yield return _playerTarget;
-        if (IsSelectable(_allyTarget) && !ReferenceEquals(_allyTarget, _playerTarget)) yield return _allyTarget;
+        foreach (SpiritBase ally in _allies)
+            if (IsSelectable(ally)) yield return ally;
     }
     public bool StrikeContains(DamageableActor actor)
     {
@@ -227,8 +302,8 @@ public partial class EnemyBase : CombatantBase
         float forward = delta.Dot(_strikeForward);
         float side = delta.Dot(_strikeForward.Cross(Vector3.Up));
         // Circle-versus-rectangle overlap, using the same dimensions as the visible footprint.
-        float dx = Mathf.Max(Mathf.Abs(side) - _strikeWidth / 2, 0);
-        float dz = forward < 0 ? -forward : Mathf.Max(forward - _strikeLength, 0);
+        float dx = Mathf.Max(Mathf.Abs(side) - StrikeWidth / 2, 0);
+        float dz = forward < 0 ? -forward : Mathf.Max(forward - StrikeLength, 0);
         return dx * dx + dz * dz <= actor.CollisionRadius * actor.CollisionRadius;
     }
 }

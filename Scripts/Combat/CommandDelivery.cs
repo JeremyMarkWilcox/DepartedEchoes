@@ -5,6 +5,7 @@ public partial class CombatEncounter
     private string DeliveryRestriction()
     {
         if (_player.IsDodging) return "Cannot give a command while dodging";
+        if (_player.IsSwingingBat) return "Cannot give a command while swinging the bat";
         return "";
     }
 
@@ -30,7 +31,7 @@ public partial class CombatEncounter
         if (!IsDeliveringCommand) return;
         if (State != EncounterState.Combat || !_player.IsCombatActive || _player.IsDefeated
             || !_allySpirit.IsCombatActive || _allySpirit.IsDefeated
-            || !_enemySpirit.IsCombatActive || _enemySpirit.IsDefeated)
+            || !IsInstanceValid(CommandEnemy) || !CommandEnemy.IsCombatActive || CommandEnemy.IsDefeated)
         {
             ClearCommandDelivery();
             return;

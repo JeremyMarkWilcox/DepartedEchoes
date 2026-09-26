@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 
 public partial class Game : Node3D
 {
@@ -10,6 +11,11 @@ public partial class Game : Node3D
     [Export] private PackedScene _channelerSpiritScene = null!;
     [Export] private PackedScene _tricksterSpiritScene = null!;
 
+    [ExportGroup("Enemy Testing")]
+    /// <summary>Optional main-enemy replacement. Keeps its marker and authored targeting mode.</summary>
+    [Export] private PackedScene _enemySceneOverride;
+
+    [ExportGroup("Scene Connections")]
     [Export] private Player _player = null!;
     [Export] private CameraRig _cameraRig = null!;
     [Export] private Marker3D _playerSpawn = null!;
@@ -20,14 +26,42 @@ public partial class Game : Node3D
     [Export] private GameHud _gameHud = null!;
     [Export] private CombatEncounter _combatEncounter = null!;
 
+    [ExportGroup("Encounter Participants")]
+    [Export] private Node3D _additionalSpawns = null!;
+    private readonly List<(CombatantBase Actor, Marker3D Spawn)> _additionalParticipants = new();
+
     public override void _EnterTree()
     {
         SwapConfiguredAllyFamily();
+        SwapConfiguredEnemy();
+    }
+
+    private void SwapConfiguredEnemy()
+    {
+        if (_enemySceneOverride == null) return;
+        var container = GetNodeOrNull<Node3D>("ActorContainer");
+        var original = container?.GetNodeOrNull<EnemyBase>("EnemySpirit");
+        Node replacement = _enemySceneOverride.Instantiate();
+        if (original == null || replacement is not EnemyBase enemy)
+        {
+            GD.PushWarning("Game: enemy override requires an EnemyBase scene and an existing EnemySpirit.");
+            replacement.Free();
+            return;
+        }
+        int index = original.GetIndex();
+        enemy.Targeting = original.Targeting;
+        container.RemoveChild(original);
+        original.Free();
+        enemy.Name = "EnemySpirit";
+        container.AddChild(enemy);
+        container.MoveChild(enemy, index);
+        _enemySpirit = enemy;
     }
 
     public override void _Ready()
     {
-        _combatEncounter?.RebindAllySpirit(_allySpirit);
+        AssembleParticipants();
+        _gameHud?.ConnectCombatDebug(_player, _combatEncounter);
         PlaceActorAtSpawn(_player, _playerSpawn, "Player");
         PlaceActorAtSpawn(_allySpirit, _allySpiritStart, "AllySpirit");
         PlaceActorAtSpawn(_enemySpirit, _enemySpiritStart, "EnemySpirit");
@@ -98,6 +132,43 @@ public partial class Game : Node3D
     {
         PlaceActorAtSpawn(_allySpirit, _allySpiritStart, "AllySpirit");
         PlaceActorAtSpawn(_enemySpirit, _enemySpiritStart, "EnemySpirit");
+        foreach (var entry in _additionalParticipants)
+            PlaceActorAtSpawn(entry.Actor, entry.Spawn, entry.Actor.Name);
+    }
+
+    private void AssembleParticipants()
+    {
+        var allies = new List<SpiritBase> { _allySpirit };
+        var enemies = new List<EnemyBase> { _enemySpirit };
+        Node container = _player.GetParent();
+        if (_additionalSpawns != null)
+        {
+            foreach (Node node in _additionalSpawns.GetChildren())
+            {
+                if (node is not EncounterSpawn slot || !slot.Enabled) continue;
+                if (slot.ParticipantScene == null)
+                {
+                    GD.PushWarning($"Game: enabled spawn {slot.Name} has no participant scene.");
+                    continue;
+                }
+                Node instance = slot.ParticipantScene.Instantiate();
+                if (instance is not SpiritBase && instance is not EnemyBase)
+                {
+                    GD.PushWarning($"Game: {slot.Name} requires a spirit or enemy scene.");
+                    instance.Free();
+                    continue;
+                }
+                instance.Name = slot.Name;
+                container.AddChild(instance);
+                var actor = (CombatantBase)instance;
+                PlaceActorAtSpawn(actor, slot, slot.Name);
+                _additionalParticipants.Add((actor, slot));
+                if (actor is SpiritBase ally) allies.Add(ally);
+                else enemies.Add((EnemyBase)actor);
+                _cameraRig?.AddExcludedBody(actor);
+            }
+        }
+        _combatEncounter?.ConfigureParticipants(allies.ToArray(), enemies.ToArray());
     }
 
     /// <summary>

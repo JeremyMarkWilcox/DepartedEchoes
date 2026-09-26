@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Godot;
 
 public partial class CombatEncounter : Node3D
@@ -27,10 +28,16 @@ public partial class CombatEncounter : Node3D
     [Export] private Area3D _battleTrigger = null!;
     [Export] private GameHud _gameHud = null!;
 
-    /// <summary>The two explicit opponents. A one-versus-one prototype needs no faction lookup.</summary>
+    /// <summary>Main authored participants; Game supplies the complete roster before triggering.</summary>
     [Export] private SpiritBase _allySpirit = null!;
 
     [Export] private EnemyBase _enemySpirit = null!;
+    private SpiritBase[] _allies = Array.Empty<SpiritBase>();
+    private EnemyBase[] _enemies = Array.Empty<EnemyBase>();
+    public System.Collections.Generic.IReadOnlyList<SpiritBase> Allies => _allies;
+    public System.Collections.Generic.IReadOnlyList<EnemyBase> Enemies => _enemies;
+    // Commands still address the authored main ally. Its current opponent supplies the threat.
+    private EnemyBase CommandEnemy => _allySpirit?.CurrentTarget as EnemyBase ?? _enemySpirit;
 
     [ExportGroup("Help Me")]
     [Export(PropertyHint.Range, "1,15,0.5")] private float _helpRadius = 6.0f;
@@ -39,7 +46,7 @@ public partial class CombatEncounter : Node3D
     private string _helpNotice = "";
     public float HelpCooldownRemaining => _helpCooldownRemaining;
     public bool IsHelpInProgress => _allySpirit?.IsRespondingToHelp == true
-        || _enemySpirit?.HasPendingDistraction == true || _enemySpirit?.IsDistracted == true;
+        || _enemies.Any(e => IsInstanceValid(e) && (e.HasPendingDistraction || e.IsDistracted));
 
     [ExportGroup("Keep Your Distance")]
     [Export(PropertyHint.Range, "1,30,0.5")] private float _distanceCooldownSeconds = 8.0f;
@@ -120,12 +127,9 @@ public partial class CombatEncounter : Node3D
             GD.PushWarning("CombatEncounter: _cameraRig is not assigned; encounters run without a camera blend.");
         }
 
-        SubscribeToCombatant(_allySpirit);
-        SubscribeToCombatant(_enemySpirit);
         SubscribeToCombatant(_player);
-
-        // Player first purely for readability; the rig is told which one takes priority separately.
-        _framingTargets = new ActorBase[] { _player, _allySpirit, _enemySpirit };
+        // Game assembles and subscribes the roster in its parent _Ready, after family selection.
+        // Exported references can still point at the freed placeholder until then.
 
         _gameHud?.SetCombatHudVisible(false);
         _gameHud?.HideResult();
@@ -142,10 +146,32 @@ public partial class CombatEncounter : Node3D
             return;
         }
 
-        UnsubscribeFromCombatant(_allySpirit);
-        _allySpirit = allySpirit;
-        SubscribeToCombatant(_allySpirit);
-        _framingTargets = new ActorBase[] { _player, _allySpirit, _enemySpirit };
+        ConfigureParticipants(new[] { allySpirit }, _enemies);
+    }
+
+    /// <summary>Game supplies a fixed roster at startup; never rebuild a running fight.</summary>
+    public void ConfigureParticipants(SpiritBase[] allies, EnemyBase[] enemies)
+    {
+        if (State != EncounterState.Exploration) return;
+        foreach (var ally in _allies) UnsubscribeFromCombatant(ally);
+        foreach (var enemy in _enemies) UnsubscribeFromCombatant(enemy);
+        _allies = allies.Where(a => IsInstanceValid(a)).Distinct().ToArray();
+        _enemies = enemies.Where(e => IsInstanceValid(e)).Distinct().ToArray();
+        _allySpirit = _allies.FirstOrDefault();
+        _enemySpirit = _enemies.FirstOrDefault();
+        _player?.SetBatTargets(_enemies);
+        foreach (var ally in _allies)
+        {
+            SubscribeToCombatant(ally);
+            ally.SetOpponents(_enemies);
+        }
+        foreach (var enemy in _enemies)
+        {
+            SubscribeToCombatant(enemy);
+            enemy.SetCandidates(_player, _allies);
+        }
+        _framingTargets = new ActorBase[] { _player }.Concat(_allies).Concat(_enemies).ToArray();
+        _gameHud?.SetParticipantRoster(_allies, _enemies);
     }
 
     public override void _ExitTree()
@@ -156,14 +182,14 @@ public partial class CombatEncounter : Node3D
             _cameraRig.BlendCompleted -= OnCameraBlendCompleted;
         }
 
-        UnsubscribeFromCombatant(_allySpirit);
-        UnsubscribeFromCombatant(_enemySpirit);
+        foreach (var ally in _allies) UnsubscribeFromCombatant(ally);
+        foreach (var enemy in _enemies) UnsubscribeFromCombatant(enemy);
         UnsubscribeFromCombatant(_player);
     }
 
     private void SubscribeToCombatant(DamageableActor combatant)
     {
-        if (combatant == null)
+        if (!IsInstanceValid(combatant))
         {
             GD.PushWarning("CombatEncounter: a combatant is not assigned; the fight will not run.");
             return;
@@ -175,7 +201,7 @@ public partial class CombatEncounter : Node3D
 
     private void UnsubscribeFromCombatant(DamageableActor combatant)
     {
-        if (combatant == null)
+        if (!IsInstanceValid(combatant))
         {
             return;
         }
@@ -193,8 +219,8 @@ public partial class CombatEncounter : Node3D
             _helpNoticeRemaining = Mathf.Max(0, _helpNoticeRemaining - (float)delta);
             _distanceCooldownRemaining = Mathf.Max(0, _distanceCooldownRemaining - (float)delta);
             _distanceNoticeRemaining = Mathf.Max(0, _distanceNoticeRemaining - (float)delta);
-            string response = _enemySpirit.IsDistracted ? "Enemy targeting ally"
-                : _enemySpirit.HasPendingDistraction ? "Distraction earned - waiting for attack to finish"
+            string response = CommandEnemy?.IsDistracted == true ? "Enemy targeting ally"
+                : CommandEnemy?.HasPendingDistraction == true ? "Distraction earned - waiting for attack to finish"
                 : _allySpirit.HelpFeedback;
             if (_helpNoticeRemaining > 0) response = _helpNotice;
             bool allyDown = _allySpirit.IsDefeated;
@@ -302,14 +328,15 @@ public partial class CombatEncounter : Node3D
             ShowHelpNotice("Help is recharging");
             return false;
         }
-        if (!_enemySpirit.IsCombatActive || _enemySpirit.IsDefeated
-            || _player.GlobalPosition.DistanceSquaredTo(_enemySpirit.GlobalPosition) > _helpRadius * _helpRadius)
+        EnemyBase threat = CommandEnemy;
+        if (!IsInstanceValid(threat) || !threat.IsCombatActive || threat.IsDefeated
+            || _player.GlobalPosition.DistanceSquaredTo(threat.GlobalPosition) > _helpRadius * _helpRadius)
         {
             ShowHelpNotice("No nearby threat");
             return false;
         }
         if (!deliver) return BeginCommandDelivery(PlayerCommand.Help);
-        if (!_allySpirit.TryAcceptHelp(_enemySpirit))
+        if (!_allySpirit.TryAcceptHelp(threat))
         {
             ShowHelpNotice("Ally unavailable");
             return false;
@@ -328,7 +355,7 @@ public partial class CombatEncounter : Node3D
             : _allySpirit.IsKeepingDistance ? "Already keeping distance"
             : _allySpirit.IsRespondingToHelp ? "Ally is helping"
             : _distanceCooldownRemaining > 0 ? "Distance command is recharging" : "";
-        if (rejection == "" && (!_enemySpirit.IsCombatActive || _enemySpirit.IsDefeated)) rejection = "No active threat";
+        if (rejection == "" && (!IsInstanceValid(CommandEnemy) || !CommandEnemy.IsCombatActive || CommandEnemy.IsDefeated)) rejection = "No active threat";
         if (rejection == "" && !deliver) return BeginCommandDelivery(PlayerCommand.Distance);
         if (rejection == "" && !_allySpirit.TryAcceptKeepDistance()) rejection = "No active threat";
         _distanceNotice = rejection == "" ? "Distance requested - ally responding" : rejection;
@@ -372,7 +399,7 @@ public partial class CombatEncounter : Node3D
     /// </summary>
     public void BeginEncounter()
     {
-        if (State != EncounterState.Exploration)
+        if (State != EncounterState.Exploration || _allies.Length == 0 || _enemies.Length == 0)
         {
             return;
         }
@@ -451,12 +478,12 @@ public partial class CombatEncounter : Node3D
 
         // Only now may the combatants approach and attack.
         _player?.StartCombat();
-        _allySpirit?.StartCombat();
-        _enemySpirit?.StartCombat();
+        foreach (var ally in _allies) ally.StartCombat();
+        foreach (var enemy in _enemies) enemy.StartCombat();
     }
 
     /// <summary>
-    /// Ally defeat leaves the player fighting. Only player or enemy defeat settles the encounter;
+    /// Ally defeat leaves the player fighting. Player defeat or the last enemy settles the encounter;
     /// the first terminal outcome stops all participants and cannot be overwritten.
     /// </summary>
     private void OnCombatantDefeated(DamageableActor combatant)
@@ -466,50 +493,45 @@ public partial class CombatEncounter : Node3D
             return;
         }
 
-        if (combatant == _allySpirit)
+        if (combatant is SpiritBase)
         {
             // DamageableActor already stopped the ally and cancelled its help response.
             // The enemy completes its committed attack before reacquiring the player.
-            ShowHelpNotice("Ally down - keep moving!");
+            if (combatant == _allySpirit) ShowHelpNotice("Command ally down - keep moving!");
             return;
         }
+
+        if (combatant != _player && _enemies.Any(e => IsInstanceValid(e) && !e.IsDefeated)) return;
 
         StopCombatants();
         State = EncounterState.Resolving;
         SetPlayerMovementEnabled(false);
 
         // Attributed to the combatant that actually fell, rather than inferred from both flags.
-        bool enemyFell = combatant == _enemySpirit;
+        bool enemyFell = combatant is EnemyBase;
 
         _gameHud?.SetStateText("Resolving");
-        _gameHud?.ShowResult(enemyFell ? "Enemy defeated" : "Player defeated");
+        _gameHud?.ShowResult(enemyFell ? (_enemies.Length == 1 ? "Enemy defeated" : "Enemies defeated") : "Player defeated");
 
         _resultCountdown = _resultDurationSeconds;
     }
 
     private void OnCombatantHealthChanged(DamageableActor combatant)
     {
+        _gameHud?.RefreshParticipantHealth();
         if (combatant == _player)
         {
             _gameHud?.SetPlayerHealth(combatant.Health, combatant.MaxHealth);
         }
-        else if (combatant == _allySpirit)
-        {
-            _gameHud?.SetAllyHealth(combatant.Health, combatant.MaxHealth);
-        }
-        else if (combatant == _enemySpirit)
-        {
-            _gameHud?.SetEnemyHealth(combatant.Health, combatant.MaxHealth);
-        }
     }
 
-    /// <summary>Clears runtime combat state on both sides and re-arms their opponents.</summary>
+    /// <summary>Clears runtime combat state across the roster and re-arms opponents.</summary>
     private void ResetCombatants()
     {
         ClearHelpCommand();
         _player?.ResetForEncounter();
-        _allySpirit?.ResetForEncounter(_enemySpirit);
-        _enemySpirit?.ResetForEncounter(_player);
+        foreach (var ally in _allies) ally.ResetForEncounter(_enemySpirit);
+        foreach (var enemy in _enemies) enemy.ResetForEncounter(_player);
     }
 
     /// <summary>
@@ -520,8 +542,8 @@ public partial class CombatEncounter : Node3D
     {
         ClearHelpCommand();
         _player?.StopCombat();
-        _allySpirit?.StopCombat();
-        _enemySpirit?.StopCombat();
+        foreach (var ally in _allies) ally.StopCombat();
+        foreach (var enemy in _enemies) enemy.StopCombat();
     }
 
     /// <summary>

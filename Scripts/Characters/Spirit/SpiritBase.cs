@@ -5,6 +5,29 @@ using Godot;
 /// </summary>
 public partial class SpiritBase : CombatantBase
 {
+    private EnemyBase[] _opponents = System.Array.Empty<EnemyBase>();
+    public DamageableActor CurrentTarget => _target;
+
+    public void SetOpponents(EnemyBase[] opponents) => _opponents = opponents;
+
+    private void ReacquireOpponent()
+    {
+        if (IsTargetValid()) return;
+        CancelPendingAttack();
+        ClearHelp();
+        ClearDistanceCommand();
+        ClearWillingness();
+        _target = null;
+        float nearest = float.PositiveInfinity;
+        foreach (EnemyBase enemy in _opponents)
+        {
+            if (!IsInstanceValid(enemy) || !enemy.IsInsideTree() || enemy.IsDefeated || !enemy.IsCombatActive) continue;
+            float distance = GlobalPosition.DistanceSquaredTo(enemy.GlobalPosition);
+            if (distance >= nearest) continue;
+            nearest = distance;
+            _target = enemy;
+        }
+    }
     public enum HelpPhase { Idle, Approach, Provoke }
 
     [ExportGroup("Attack Willingness Prototype")]
@@ -236,6 +259,7 @@ public partial class SpiritBase : CombatantBase
 
     public override void _PhysicsProcess(double delta)
     {
+        if (IsCombatActive && !IsDefeated) ReacquireOpponent();
         base._PhysicsProcess(delta);
         RefreshDecisionDisplay();
     }

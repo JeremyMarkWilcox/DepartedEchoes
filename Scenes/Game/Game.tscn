@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://b2i0hd40qdqov"]
 
 [ext_resource type="Script" uid="uid://kkaml42l40ls" path="res://Scripts/Game/Game.cs" id="1_rdw05"]
+[ext_resource type="Script" path="res://Scripts/Game/EncounterSpawn.cs" id="10_spawn"]
 [ext_resource type="PackedScene" uid="uid://c6o7q5wlvco23" path="res://Scenes/Levels/PrototypeLevel.tscn" id="2_1q8bt"]
 [ext_resource type="PackedScene" uid="uid://t48gn1hsfpdf" path="res://Scenes/Characters/Player/Player.tscn" id="2_xbxml"]
 [ext_resource type="PackedScene" path="res://Scenes/Characters/Enemy/EnemyBase.tscn" id="4_enemy"]
@@ -11,7 +12,7 @@
 [ext_resource type="PackedScene" uid="uid://l7tuxlqlubtf" path="res://Scenes/Combat/CombatEncounter.tscn" id="6_m1o7v"]
 [ext_resource type="PackedScene" uid="uid://gjkam268r7db" path="res://Scenes/Ui/Game Hud/GameHUD.tscn" id="7_3586x"]
 
-[node name="Game" type="Node3D" unique_id=440377025 node_paths=PackedStringArray("_player", "_cameraRig", "_playerSpawn", "_allySpirit", "_allySpiritStart", "_enemySpirit", "_enemySpiritStart", "_gameHud", "_combatEncounter")]
+[node name="Game" type="Node3D" unique_id=440377025 node_paths=PackedStringArray("_player", "_cameraRig", "_playerSpawn", "_allySpirit", "_allySpiritStart", "_enemySpirit", "_enemySpiritStart", "_gameHud", "_combatEncounter", "_additionalSpawns")]
 script = ExtResource("1_rdw05")
 _player = NodePath("ActorContainer/Player")
 _cameraRig = NodePath("CameraRig")
@@ -22,6 +23,7 @@ _enemySpirit = NodePath("ActorContainer/EnemySpirit")
 _enemySpiritStart = NodePath("LevelContainer/PrototypeLevel/EnemySpiritStart")
 _gameHud = NodePath("GameHud")
 _combatEncounter = NodePath("CombatEncounter")
+_additionalSpawns = NodePath("EncounterSpawns")
 _guardianSpiritScene = ExtResource("8_guardian")
 _channelerSpiritScene = ExtResource("6_3586x")
 _tricksterSpiritScene = ExtResource("9_trickster")
@@ -53,3 +55,25 @@ _allySpirit = NodePath("../ActorContainer/AllySpirit")
 _enemySpirit = NodePath("../ActorContainer/EnemySpirit")
 
 [node name="GameHud" parent="." unique_id=806819728 instance=ExtResource("7_3586x")]
+
+[node name="EncounterSpawns" type="Node3D" parent="."]
+
+[node name="ExtraGuardian" type="Marker3D" parent="EncounterSpawns"]
+position = Vector3(4, 1, -3)
+script = ExtResource("10_spawn")
+ParticipantScene = ExtResource("8_guardian")
+
+[node name="ExtraTrickster" type="Marker3D" parent="EncounterSpawns"]
+position = Vector3(5, 1, 5)
+script = ExtResource("10_spawn")
+ParticipantScene = ExtResource("9_trickster")
+
+[node name="ExtraEnemyOne" type="Marker3D" parent="EncounterSpawns"]
+position = Vector3(-6, 1.2, 3)
+script = ExtResource("10_spawn")
+ParticipantScene = ExtResource("4_enemy")
+
+[node name="ExtraEnemyTwo" type="Marker3D" parent="EncounterSpawns"]
+position = Vector3(-7, 1.2, -4)
+script = ExtResource("10_spawn")
+ParticipantScene = ExtResource("4_enemy")

@@ -45,8 +45,14 @@ public partial class Player : DamageableActor
 
     public override void _UnhandledInput(InputEvent e)
     {
+        if (e.IsActionPressed("bat_strike", allowEcho: false))
+        {
+            TrySwingBat();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (!e.IsActionPressed("dodge", allowEcho: false)) return;
-        if (!_isCombatActive || !_isMovementEnabled || _isDeliveringCommand || _isDefeated || IsDodging || _cooldownRemaining > 0 || !IsOnFloor()) return;
+        if (!_isCombatActive || !_isMovementEnabled || _isDeliveringCommand || IsSwingingBat || _isDefeated || IsDodging || _cooldownRemaining > 0 || !IsOnFloor()) return;
         Vector3 direction = GetMoveDirection();
         if (direction.IsZeroApprox()) direction = _meshHolder != null ? -_meshHolder.GlobalBasis.Z : Vector3.Forward;
         direction.Y = 0;
@@ -58,18 +64,20 @@ public partial class Player : DamageableActor
     public void ResetForEncounter()
     {
         StopCombat();
+        ClearBatFeedback();
         ResetHealth();
         RefreshPlayerVisuals();
     }
     public override void StopCombat()
     {
         base.StopCombat();
+        CancelBat();
         SetCommandDeliveryActive(false);
         _dodgeRemaining = _cooldownRemaining = _hitRemaining = 0;
         Velocity = new Vector3(0, Velocity.Y, 0);
         RefreshPlayerVisuals();
     }
-    protected override void OnDamageReceived() { _hitRemaining = 0.18f; RefreshPlayerVisuals(); }
+    protected override void OnDamageReceived() { CancelBat(); _hitRemaining = 0.18f; RefreshPlayerVisuals(); }
     private void RefreshPlayerVisuals()
     {
         if (_playerMaterial == null) return;
@@ -91,6 +99,7 @@ public partial class Player : DamageableActor
     public override void _Ready()
     {
         base._Ready();
+        CreateBatVisuals();
         _playerMesh = _meshHolder?.GetNodeOrNull<MeshInstance3D>("MeshInstance3D");
         if (_meshHolder != null) _baselineScale = _meshHolder.Scale;
         if (_playerMesh != null)
@@ -123,6 +132,7 @@ public partial class Player : DamageableActor
 
         if (!isEnabled)
         {
+            CancelBat();
             _dodgeRemaining = 0;
             Velocity = new Vector3(0.0f, Velocity.Y, 0.0f);
         }
@@ -131,6 +141,7 @@ public partial class Player : DamageableActor
     public override void _PhysicsProcess(double delta)
     {
         float dt = (float)delta;
+        TickBat(dt);
         _cooldownRemaining = Mathf.Max(0, _cooldownRemaining - dt);
         _hitRemaining = Mathf.Max(0, _hitRemaining - dt);
         Vector3 velocity = Velocity;
@@ -151,7 +162,7 @@ public partial class Player : DamageableActor
         Vector3 planar = new Vector3(velocity.X, 0.0f, velocity.Z);
         float rate = desired.IsZeroApprox() ? _deceleration : _acceleration;
         planar = IsDodging ? _dodgeDirection * _dodgeSpeed : planar.MoveToward(desired, rate * dt);
-        if (IsHeldForCommand) planar = Vector3.Zero;
+        if (IsHeldForCommand || IsSwingingBat) planar = Vector3.Zero;
 
         velocity.X = planar.X;
         velocity.Z = planar.Z;
@@ -165,7 +176,7 @@ public partial class Player : DamageableActor
 
     private Vector3 GetMoveDirection()
     {
-        if (!_isMovementEnabled || IsHeldForCommand || _isDefeated)
+        if (!_isMovementEnabled || IsHeldForCommand || IsSwingingBat || _isDefeated)
         {
             return Vector3.Zero;
         }

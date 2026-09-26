@@ -1,0 +1,24 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://Scenes/Game/Game.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://Scenes/Characters/Enemy/HuskEnemy.tscn" id="2"]
+
+[node name="HuskPractice" instance=ExtResource("1")]
+_allyFamily = 2
+_enemySceneOverride = ExtResource("2")
+
+[node name="EnemySpirit" parent="ActorContainer"]
+Targeting = 1
+
+[node name="ExtraGuardian" parent="EncounterSpawns"]
+Enabled = false
+
+[node name="ExtraTrickster" parent="EncounterSpawns"]
+Enabled = false
+
+[node name="ExtraEnemyOne" parent="EncounterSpawns"]
+Enabled = false
+
+[node name="ExtraEnemyTwo" parent="EncounterSpawns"]
+Enabled = false
+

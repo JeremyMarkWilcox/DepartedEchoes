@@ -1,0 +1,9 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://Scenes/Characters/Enemy/EnemyBase.tscn" id="1"]
+[ext_resource type="Script" path="res://Scripts/Characters/Enemy/HuskEnemy.cs" id="2"]
+
+[node name="Husk" instance=ExtResource("1")]
+script = ExtResource("2")
+_moveSpeed = 3.4
+_recoverySeconds = 1.0

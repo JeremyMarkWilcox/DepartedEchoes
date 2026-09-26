@@ -1,4 +1,6 @@
 using Godot;
+using System;
+using System.Linq;
 
 public partial class GameHud : CanvasLayer
 {
@@ -9,6 +11,43 @@ public partial class GameHud : CanvasLayer
     [Export] private Label _enemyHealthLabel = null!;
     [Export] private Label _resultLabel = null!;
     [Export] private Label _helpLabel = null!;
+    private SpiritBase[] _allies = Array.Empty<SpiritBase>();
+    private EnemyBase[] _enemies = Array.Empty<EnemyBase>();
+
+    public void SetParticipantRoster(SpiritBase[] allies, EnemyBase[] enemies)
+    {
+        _allies = allies;
+        _enemies = enemies;
+        // Reserve complete rows even after defeat; no HUD jumping during a fight.
+        if (_allyHealthLabel != null) _allyHealthLabel.Size = new Vector2(400, 28 * allies.Length);
+        if (_enemyHealthLabel != null)
+        {
+            _enemyHealthLabel.Position = new Vector2(16, 50 + 30 * allies.Length);
+            _enemyHealthLabel.Size = new Vector2(400, 28 * enemies.Length);
+        }
+        float bottom = 50 + 30 * (allies.Length + enemies.Length);
+        if (_playerHealthLabel != null) _playerHealthLabel.Position = new Vector2(16, bottom);
+        var controls = GetNodeOrNull<Label>("HUDRoot/ControlsLabel");
+        if (controls != null)
+        {
+            controls.Position = new Vector2(16, bottom + 36);
+        }
+        if (_helpLabel != null) _helpLabel.Position = new Vector2(16, bottom + 100);
+        RefreshParticipantHealth();
+    }
+
+    public void RefreshParticipantHealth()
+    {
+        if (_allyHealthLabel != null)
+            _allyHealthLabel.Text = string.Join("\n", _allies.Select((a, i) =>
+                HealthRow(a, _allies.Length == 1 ? "Ally" : $"Ally {i + 1}{(i == 0 ? " [commands]" : "")}")));
+        if (_enemyHealthLabel != null)
+            _enemyHealthLabel.Text = string.Join("\n", _enemies.Select((e, i) =>
+                HealthRow(e, _enemies.Length == 1 ? "Enemy" : $"Enemy {i + 1}")));
+    }
+
+    private static string HealthRow(DamageableActor actor, string label) =>
+        IsInstanceValid(actor) ? $"{label}  {Mathf.CeilToInt(actor.Health)} / {Mathf.CeilToInt(actor.MaxHealth)}" : $"{label} unavailable";
 
     public void SetHelpStatus(string text)
     {
