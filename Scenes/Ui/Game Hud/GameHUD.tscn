@@ -110,7 +110,7 @@ offset_left = 16.0
 offset_top = 146.0
 offset_right = 600.0
 offset_bottom = 174.0
-text = "Dodge: Space / A | Bat: J / RB (stagger)\nEnd: exit | Esc: release mouse | Left click: recapture"
+text = "Dodge: Space / A | Bat: J / RB | Spirit: R / LB\nEnd: exit | Esc: release mouse | Left click: recapture"
 
 [node name="HelpLabel" type="Label" parent="HUDRoot"]
 visible = false

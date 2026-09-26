@@ -1,24 +1,20 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dwnetwi52c8or"]
 
-[ext_resource type="PackedScene" path="res://Scenes/Game/Game.tscn" id="1"]
+[ext_resource type="PackedScene" uid="uid://b2i0hd40qdqov" path="res://Scenes/Game/Game.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://Scenes/Characters/Enemy/EnemyBase.tscn" id="2"]
 
-[node name="Baseline" instance=ExtResource("1")]
+[node name="Baseline" unique_id=1396034172 instance=ExtResource("1")]
 _allyFamily = 2
 _enemySceneOverride = ExtResource("2")
 
-[node name="EnemySpirit" parent="ActorContainer"]
-Targeting = 2
+[node name="ExtraGuardian" parent="EncounterSpawns" index="0"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 1, -3)
 
-[node name="ExtraGuardian" parent="EncounterSpawns"]
-Enabled = false
+[node name="ExtraTrickster" parent="EncounterSpawns" index="1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1, 5)
 
-[node name="ExtraTrickster" parent="EncounterSpawns"]
-Enabled = false
+[node name="ExtraEnemyOne" parent="EncounterSpawns" index="2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 1.2, 3)
 
-[node name="ExtraEnemyOne" parent="EncounterSpawns"]
-Enabled = false
-
-[node name="ExtraEnemyTwo" parent="EncounterSpawns"]
-Enabled = false
-
+[node name="ExtraEnemyTwo" parent="EncounterSpawns" index="3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 1.2, -4)

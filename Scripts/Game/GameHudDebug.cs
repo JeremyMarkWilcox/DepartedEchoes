@@ -41,6 +41,7 @@ public partial class GameHud
 
     public override void _Process(double delta)
     {
+        UpdateCommandMarker();
         if (_debugPanel == null) return;
         _debugPanel.Visible = ShowCombatDebug;
         if (!ShowCombatDebug) return;

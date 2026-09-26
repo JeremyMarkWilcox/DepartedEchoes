@@ -117,6 +117,13 @@ bat_strike={
 ]
 }
 
+select_next_spirit={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":82,"device":-1)
+, Object(InputEventJoypadButton,"button_index":9,"device":-1)
+]
+}
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

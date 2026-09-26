@@ -30,7 +30,7 @@ public partial class CombatEncounter
     {
         if (!IsDeliveringCommand) return;
         if (State != EncounterState.Combat || !_player.IsCombatActive || _player.IsDefeated
-            || !_allySpirit.IsCombatActive || _allySpirit.IsDefeated
+            || !IsInstanceValid(SelectedAlly) || !SelectedAlly.IsCombatActive || SelectedAlly.IsDefeated
             || !IsInstanceValid(CommandEnemy) || !CommandEnemy.IsCombatActive || CommandEnemy.IsDefeated)
         {
             ClearCommandDelivery();
@@ -41,7 +41,7 @@ public partial class CombatEncounter
         {
             PlayerCommand cancelled = _pendingCommand;
             ClearCommandDelivery();
-            ShowCommandNotice(cancelled, "Command cancelled - dodging");
+            ShowCommandNotice(cancelled, "Command cancelled - " + DeliveryRestriction());
             return;
         }
 

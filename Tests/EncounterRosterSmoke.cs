@@ -38,6 +38,7 @@ public partial class EncounterRosterSmoke : Node
                 await Until(() => _encounter.State == CombatEncounter.EncounterState.Exploration, 180);
             }
             await CheckCommands();
+            await CheckSpiritSelection();
             await CheckEnemyCandidates();
             await CheckCancellation();
             await CheckNaturalFight();
@@ -144,6 +145,76 @@ public partial class EncounterRosterSmoke : Node
         await Until(() => _encounter.State == CombatEncounter.EncounterState.Exploration, 180);
     }
 
+    private async Task CheckSpiritSelection()
+    {
+        await LoadGame(2, 1);
+        void Cycle(bool echo = false, bool controller = false)
+        {
+            if (controller)
+            {
+                Input.ParseInputEvent(new InputEventJoypadButton { ButtonIndex = JoyButton.LeftShoulder, Pressed = true });
+                Input.ParseInputEvent(new InputEventJoypadButton { ButtonIndex = JoyButton.LeftShoulder, Pressed = false });
+            }
+            else
+            {
+                Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = Key.R, Pressed = true, Echo = echo });
+                Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = Key.R, Pressed = false });
+            }
+            Input.FlushBufferedEvents();
+        }
+        Cycle();
+        Check(_encounter.SelectedAlly == _encounter.Allies[0], "selection ignored outside combat");
+        await BeginCombat();
+        foreach (var actor in _encounter.Allies.Cast<CombatantBase>().Concat(_encounter.Enemies)) actor.SetPhysicsProcess(false);
+        Cycle(echo: true);
+        Check(_encounter.SelectedAlly == _encounter.Allies[0], "selection ignores keyboard echo");
+        var enemyTarget = _encounter.Enemies[0].CurrentTarget;
+        Cycle();
+        Check(_encounter.SelectedAlly == _encounter.Allies[1] && _encounter.Enemies[0].CurrentTarget == enemyTarget,
+            "R selects second spirit without retargeting enemy");
+        var hud = _game.GetNode<GameHud>("GameHud");
+        hud._Process(0);
+        var marker = hud.GetNode<Label3D>("CommandSelectionMarker");
+        Check(marker.Visible && hud.GetNode<Label>("HUDRoot/AllyHealthLabel").Text.Contains("Ally 2 [commands]"),
+            "selected spirit has HUD and world indicators without debug enabled");
+        _encounter.CommandDeliverySeconds = 0.3f;
+        Check(_encounter.TryRequestKeepDistance(), "selected extra spirit accepts distance delivery");
+        Cycle();
+        Check(_encounter.SelectedAlly == _encounter.Allies[1] && _encounter.IsDeliveringCommand, "selection locks during delivery");
+        await Frames(25);
+        Check(_encounter.Allies[1].IsKeepingDistance && !_encounter.Allies[0].IsKeepingDistance, "command delivered only to selected recipient");
+        float cooldown = _encounter.DistanceCooldownRemaining;
+        Cycle(controller: true);
+        Check(_encounter.SelectedAlly == _encounter.Allies[2] && _encounter.DistanceCooldownRemaining == cooldown
+            && !_encounter.TryRequestKeepDistance(), "controller cycles and shared cooldown cannot be bypassed");
+        var player = _game.GetNode<Player>("ActorContainer/Player");
+        player.GlobalPosition = _encounter.Enemies[0].GlobalPosition + Vector3.Right * 4;
+        Check(_encounter.TryRequestHelp(), "Help delivery can address third spirit");
+        _encounter.Allies[2].ApplyDamage(10000);
+        Check(!_encounter.IsDeliveringCommand && !player.IsHeldForCommand, "recipient defeat cancels delivery and movement hold immediately");
+        await Frames(30);
+        Check(_encounter.HelpCooldownRemaining == 0 && !_encounter.Allies[0].IsRespondingToHelp, "cancelled delivery never transfers to another spirit");
+        Cycle();
+        Check(_encounter.SelectedAlly == _encounter.Allies[0], "cycle wraps past defeated spirit");
+        _encounter.CommandDeliverySeconds = 0;
+        Check(_encounter.TryRequestHelp() && _encounter.Allies[0].IsRespondingToHelp, "Help lands on newly selected living spirit");
+        Cycle();
+        Check(_encounter.Allies[0].IsRespondingToHelp && _encounter.SelectedAlly == _encounter.Allies[1], "switching preserves an accepted response");
+        _encounter.Allies[0].ApplyDamage(10000);
+        _encounter.Allies[1].ApplyDamage(10000);
+        Cycle();
+        Check(!_encounter.TryRequestHelp() && !_encounter.TryRequestKeepDistance(), "all allies down safely rejects commands");
+        ExitWithEnd();
+        await Until(() => _encounter.State == CombatEncounter.EncounterState.Exploration, 180);
+        hud._Process(0);
+        Check(!marker.Visible && _encounter.SelectedAlly == _encounter.Allies[0], "return hides marker and resets selection");
+        foreach (var actor in _encounter.Allies.Cast<CombatantBase>().Concat(_encounter.Enemies)) actor.SetPhysicsProcess(true);
+        await BeginCombat();
+        Check(_encounter.SelectedAlly == _encounter.Allies[0] && !_encounter.IsDeliveringCommand, "later encounter begins with clean selection");
+        ExitWithEnd();
+        await Until(() => _encounter.State == CombatEncounter.EncounterState.Exploration, 180);
+    }
+
     private async Task CheckCancellation()
     {
         foreach (var phase in new[] { CombatEncounter.EncounterState.Setup, CombatEncounter.EncounterState.Ready, CombatEncounter.EncounterState.Combat })
@@ -208,13 +279,20 @@ public partial class EncounterRosterSmoke : Node
             _game.QueueFree();
             await Frames(3);
             _game = GD.Load<PackedScene>($"res://Scenes/Game/Presets/{name}.tscn").Instantiate<Game>();
+            var configuredFamily = (Game.AllyFamily)Field(_game, "_allyFamily");
             AddChild(_game);
             _encounter = _game.GetNode<CombatEncounter>("CombatEncounter");
             await Frames(8);
             int count = name == "SmallGroup" ? 3 : 1;
             Check(_encounter.State == CombatEncounter.EncounterState.Exploration, $"{name}: startup stays exploration");
             Check(_encounter.Allies.Count == count && _encounter.Enemies.Count == count, $"{name}: authored roster assembled");
-            Check(_encounter.Allies[0] is ChannelerSpirit, $"{name}: main ally is Channeler");
+            Check(configuredFamily switch
+            {
+                Game.AllyFamily.Channeler => _encounter.Allies[0] is ChannelerSpirit,
+                Game.AllyFamily.Trickster => _encounter.Allies[0] is TricksterSpirit,
+                Game.AllyFamily.Guardian => _encounter.Allies[0].GetType() == typeof(SpiritBase),
+                _ => true
+            }, $"{name}: main ally matches saved family choice");
             Check((_encounter.Enemies[0] is HuskEnemy) == (name == "HuskPractice"), $"{name}: intended enemy scene");
             var mode = name == "HuskPractice" ? EnemyBase.TargetingMode.Player
                 : name == "SmallGroup" ? EnemyBase.TargetingMode.Closest : EnemyBase.TargetingMode.AllySpirit;

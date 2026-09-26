@@ -17,12 +17,12 @@ Open a scene in `Scenes/Game/Presets/` and use Godot's **Run Current Scene** but
 | Scene | Lineup | Main enemy targeting | Purpose |
 | --- | --- | --- | --- |
 | Baseline.tscn | Channeler + one ordinary enemy | Ally spirit | Simple reference fight |
-| HuskPractice.tscn | Channeler + one Husk | Player | Dodge and bat interruption practice |
+| HuskPractice.tscn | Saved Ally Family + one Husk | Player | Dodge and bat interruption practice |
 | SmallGroup.tscn | Channeler, Guardian, Trickster + three ordinary enemies | Closest | Group readability, targeting and reset checks |
 
-Small Group's two extra enemies retain their scene default of targeting the player. Commands still address the main Channeler. Husk Practice is a normal fight: the ally can defeat the Husk and the player can lose; leave and re-enter for another attempt.
+Small Group's two extra enemies retain their scene default of targeting the player. Commands start on the main Channeler and can be switched with R / LB. Husk Practice is a normal fight: the ally can defeat the Husk and the player can lose; leave and re-enter for another attempt.
 
-These are inherited Game scenes with configuration overrides, not a new runtime selector. Existing spawn markers, camera, controls and combat tuning are reused. Each preset explicitly selects Channeler and its main enemy scene, and sets all four existing optional slots. To try another main spirit, change the preset root's **Spirit Family Testing → Ally Family**, then run that scene again. To customize the lineup further, use its inherited EncounterSpawns slots. New slots added to the base Game scene will also be inherited; keep them disabled unless wanted in every preset.
+These are inherited Game scenes with configuration overrides, not a runtime lineup selector. Existing spawn markers, camera, controls and combat tuning are reused. To try another main spirit, change the preset root's **Spirit Family Testing → Ally Family**, then run that scene again. Saved family choices are respected by the preset tests. To customize the lineup further, use its inherited EncounterSpawns slots. New slots added to the base Game scene will also be inherited; keep them disabled unless wanted in every preset.
 
 The roster smoke test loads each saved preset without changing its settings, verifies the lineup/targeting and startup state, then checks two begin/exit/reset cycles. This uses direct encounter entry and injected End events; actual trigger entry and visual comfort still require editor playtesting.
 
@@ -47,7 +47,11 @@ Allies initially face the main enemy and acquire the nearest living enemy when t
 
 Victory requires every enemy to fall. Player defeat ends the fight. Ally defeat does not end it and no automatic revival is added. End/Back stops all actors and their pending actions. Full reset happens only after the return blend.
 
-Commands intentionally still address the main ally (marked `[commands]` in multi-ally health feedback), against that ally's current enemy. If that ally falls, commands remain unavailable; another ally is not silently chosen. Multi-spirit command selection, coordinated attacks, crowd avoidance and revival are separate gameplay decisions.
+During Combat, **R / left shoulder (LB / L1)** cycles living active spirits in roster order and wraps around. Keyboard echo is ignored. The selected health row shows `[commands]`; a gold `COMMANDS` label follows the selected living spirit even with debug disabled. Help and Keep Your Distance address this spirit and use its current opponent. Selection does not change anyone's combat target.
+
+Selection is locked during command delivery. If the recipient falls during delivery, the call cancels immediately and releases its player movement hold without spending a cooldown. A fallen selection is retained until the player cycles; dead spirits are skipped. With no living spirits, commands remain unavailable. A single living spirit stays selected. Selection is ignored outside Combat and resets to the first ally each encounter.
+
+Cooldowns remain shared across the roster, so switching cannot bypass them. An already accepted response continues on its original spirit after switching. Only one Help response/distraction may be in progress across the roster at a time, preserving the existing Help restriction. Coordinated attacks, crowd avoidance and revival remain separate work.
 
 ## Automated verification
 
@@ -72,9 +76,9 @@ Injected input does not verify Godot editor shortcuts. Camera membership checks 
 1. Run the unchanged default lineup; confirm movement/orbit, command delivery, dodge, Esc release and left-click recapture.
 2. Enable one extra enemy, then all four slots. Check readable health rows, camera framing, targeting cues, collision crowding and overlapping attack warnings.
 3. Check End and controller Back during approach, anticipation and result display. Walk out/re-enter for a second cycle; confirm full health, original positions and clean visuals.
-4. Defeat one enemy and confirm others continue; verify the main ally switches targets. Check commands before and after retargeting and while the main ally is down.
+4. Cycle all spirits with R / LB; confirm marker and health row match. Deliver both commands to different spirits, try switching during delivery, then lose the selected spirit and cycle to another. Verify cooldowns persist and the next encounter starts on the main ally. Verify keyboard/controller delivery in the embedded editor; synthetic events do not check editor shortcuts.
 
-Known limits: direct movement can get blocked by other bodies, and friendly bodies still block Channeler shots. Large rosters can exceed the primitive HUD's vertical space. Slots are designed for small prototype groups; no formation logic, team command UI, new abilities, or balance changes are included.
+Known limits: direct movement can get blocked by other bodies, and friendly bodies still block Channeler shots. Large rosters can exceed the primitive HUD's vertical space. Selection is a forward cycle only; there is no formation logic or direct click-to-select interface.
 
 ## Bat and Husk prototype
 

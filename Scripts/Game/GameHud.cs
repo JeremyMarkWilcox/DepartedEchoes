@@ -13,6 +13,34 @@ public partial class GameHud : CanvasLayer
     [Export] private Label _helpLabel = null!;
     private SpiritBase[] _allies = Array.Empty<SpiritBase>();
     private EnemyBase[] _enemies = Array.Empty<EnemyBase>();
+    private SpiritBase _commandSelection;
+    private Label3D _commandMarker;
+    private bool _combatHudVisible;
+
+    public void SetCommandSelection(SpiritBase ally)
+    {
+        _commandSelection = ally;
+        if (_commandMarker == null)
+        {
+            _commandMarker = new Label3D
+            {
+                Name = "CommandSelectionMarker", Text = "COMMANDS", FontSize = 40,
+                Modulate = new Color(1, 0.85f, 0.2f),
+                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, Visible = false
+            };
+            AddChild(_commandMarker);
+        }
+        RefreshParticipantHealth();
+        UpdateCommandMarker();
+    }
+
+    private void UpdateCommandMarker()
+    {
+        if (_commandMarker == null) return;
+        _commandMarker.Visible = _combatHudVisible && IsInstanceValid(_commandSelection) && !_commandSelection.IsDefeated;
+        if (_commandMarker.Visible)
+            _commandMarker.GlobalPosition = _commandSelection.GlobalPosition + Vector3.Up * (_commandSelection.CollisionHalfHeight + 0.7f);
+    }
 
     public void SetParticipantRoster(SpiritBase[] allies, EnemyBase[] enemies)
     {
@@ -40,7 +68,7 @@ public partial class GameHud : CanvasLayer
     {
         if (_allyHealthLabel != null)
             _allyHealthLabel.Text = string.Join("\n", _allies.Select((a, i) =>
-                HealthRow(a, _allies.Length == 1 ? "Ally" : $"Ally {i + 1}{(i == 0 ? " [commands]" : "")}")));
+                HealthRow(a, $"Ally {i + 1}{(a == _commandSelection ? " [commands]" : "")}")));
         if (_enemyHealthLabel != null)
             _enemyHealthLabel.Text = string.Join("\n", _enemies.Select((e, i) =>
                 HealthRow(e, _enemies.Length == 1 ? "Enemy" : $"Enemy {i + 1}")));
@@ -75,6 +103,8 @@ public partial class GameHud : CanvasLayer
     /// <summary>Shows or hides all participant health readouts. Hidden during exploration.</summary>
     public void SetCombatHudVisible(bool isVisible)
     {
+        _combatHudVisible = isVisible;
+        UpdateCommandMarker();
         if (_playerHealthLabel != null) _playerHealthLabel.Visible = isVisible;
         if (_allyHealthLabel != null)
         {

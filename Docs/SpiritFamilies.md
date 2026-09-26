@@ -10,9 +10,9 @@ Use family names for scenes, with roles described separately:
 
 These are working family names, not final creature names. Distraction is a command/ability rather than a family name. Evolution forms can later use `<Family>Form01.tscn`, `Form02`, and `Form03` without requiring separate behavior scripts for each form.
 
-Both existing family scenes inherit `SpiritBase.tscn`, which holds the common body, visuals references, and melee defaults. Guardian currently uses those defaults. Channeler attaches `ChannelerSpirit.cs`, a subclass of `SpiritBase`, so health, Brave, hesitation, and command responses remain shared. Only ranged positioning and projectile attacks differ.
+The family scenes inherit `SpiritBase.tscn`, which holds the common body, visuals references, and melee defaults. Guardian currently uses those defaults. Channeler attaches `ChannelerSpirit.cs`, a subclass of `SpiritBase`, so health, Brave, hesitation, and command responses remain shared. Only ranged positioning and projectile attacks differ.
 
-The game still contains a scene instance named `AllySpirit`; it now instances Trickster for the current prototype. To test another family, replace that instance with the desired family scene and retain the `AllySpirit` node name so Game and CombatEncounter references remain valid. Preserve the desired per-instance Brave/hesitation settings. There is no party-selection system yet.
+The main scene instance is named `AllySpirit`. Choose its replacement using the Game root's **Spirit Family Testing → Ally Family** setting before running. Optional EncounterSpawns add other spirits. During combat, R / LB cycles the living command recipient; this changes which spirit receives commands, not the lineup or anyone's attack target. A gold COMMANDS label and marked health row show selection. See Tests/README.md for delivery, cooldown and defeat rules.
 
 ## Channeler prototype rules
 

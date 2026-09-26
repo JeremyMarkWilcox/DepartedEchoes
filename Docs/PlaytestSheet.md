@@ -13,11 +13,12 @@ Preset / spirit changes / tuning changes: __________
 Open a preset under `Scenes/Game/Presets/` and choose **Run Current Scene**. Run Project opens the original Game scene instead. Stop before switching presets.
 
 - Baseline: Channeler against one ordinary enemy targeting the ally.
-- HuskPractice: Channeler against a Husk targeting the player. This is a normal fight with defeat, not an endless training dummy.
-- SmallGroup: three spirits against three enemies. Commands address the main Channeler only.
+- HuskPractice: the saved Ally Family against a Husk targeting the player. This is a normal fight with defeat, not an endless training dummy.
+- SmallGroup: three spirits against three enemies. Commands start on the main Channeler; R / LB selects another living spirit.
 - Move: WASD / left stick. Exploration orbit: captured mouse / right stick.
 - Bat: J / RB (R1). Dodge: Space / A (Cross).
 - Help: Q / Y (Triangle). Keep distance: E / X (Square).
+- Next command spirit: R / LB (L1). Gold COMMANDS marker and `[commands]` health row identify the recipient. Selection locks during delivery; cooldowns are shared.
 - Exit encounter: End / Back (Select). Esc releases the mouse; left click recaptures it.
 
 For diagnostics, select **GameHud → Combat Debug → Show Combat Debug** before running. During a run, use the **Remote** scene tree to change Show Combat Debug or Debug Enemy Number. Enemy numbers match the health rows; 1 is the main enemy. Selection only changes the readout. The display is a live snapshot, not an event log or proof that a hit should have landed. Brief swing phases may pass quickly.
@@ -36,7 +37,7 @@ If a bat attempt seems wrong, record **Last bat event** in the debug panel. It p
 | 6 | HuskPractice: step out of overhead/lunge warning | Attack stays committed to its warning direction. Lunge moves before contact damage; a successful attack hits once. | Not run | |
 | 7 | Any: End during Setup, Ready, swing, lunge and result | Each phase exits cleanly. Repeated End does not restart return. No old hit/Ready callback reactivates combat. Record phases tested. | Not run | |
 | 8 | Any: finish fight, leave trigger, re-enter | Health, placement, visuals and attack timing reset. Standing in trigger does not immediately restart. | Not run | |
-| 9 | SmallGroup: fight and issue commands | All actors appear; health rows remain readable. Defeating one enemy does not end fight; last enemy or player defeat resolves it. Main ally remains command recipient. | Not run | |
+| 9 | SmallGroup: fight, cycle selection and issue commands | Marker/health row match selected spirit; commands reach that spirit only. Selection locks during delivery, skips fallen spirits, preserves cooldowns, and resets next encounter. Defeating one enemy does not end fight; last enemy or player defeat resolves it. | Not run | |
 | 10 | Any: Esc, use keyboard actions, left-click recapture | Mouse release/recapture works without performing a bat swing or encounter exit. Test a real controller separately. | Not run | |
 | 11 | Any: debug on/off, change enemy number | Bat/dodge and enemy state reflect action; changing observed enemy does not change its target. Panel remains readable; invalid number says unavailable. | Not run | |
 | 12 | SmallGroup: normal and narrow window, spread out/regroup | Camera reframes smoothly. At maximum distance player remains prioritized; distant fighters may leave frame. Check debug/HUD overlap. | Not run | |

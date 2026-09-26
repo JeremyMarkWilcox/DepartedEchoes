@@ -36,8 +36,32 @@ public partial class CombatEncounter : Node3D
     private EnemyBase[] _enemies = Array.Empty<EnemyBase>();
     public System.Collections.Generic.IReadOnlyList<SpiritBase> Allies => _allies;
     public System.Collections.Generic.IReadOnlyList<EnemyBase> Enemies => _enemies;
-    // Commands still address the authored main ally. Its current opponent supplies the threat.
-    private EnemyBase CommandEnemy => _allySpirit?.CurrentTarget as EnemyBase ?? _enemySpirit;
+    public SpiritBase SelectedAlly { get; private set; }
+    private EnemyBase CommandEnemy => IsInstanceValid(SelectedAlly) ? SelectedAlly.CurrentTarget as EnemyBase : null;
+
+    /// <summary>Cycle living allies without redirecting a command already being delivered.</summary>
+    public bool TrySelectNextAlly()
+    {
+        if (State != EncounterState.Combat || !IsInstanceValid(_player) || _player.IsDefeated) return false;
+        if (IsDeliveringCommand)
+        {
+            ShowHelpNotice("Finish calling before switching spirit");
+            return false;
+        }
+        int start = Array.IndexOf(_allies, SelectedAlly);
+        for (int step = 1; step <= _allies.Length; step++)
+        {
+            var ally = _allies[(start + step) % _allies.Length];
+            if (!IsInstanceValid(ally) || ally.IsDefeated || !ally.IsCombatActive) continue;
+            if (ally == SelectedAlly) return false;
+            SelectedAlly = ally;
+            _helpNoticeRemaining = _distanceNoticeRemaining = 0;
+            _gameHud?.SetCommandSelection(SelectedAlly);
+            return true;
+        }
+        ShowHelpNotice("No living spirit available");
+        return false;
+    }
 
     [ExportGroup("Help Me")]
     [Export(PropertyHint.Range, "1,15,0.5")] private float _helpRadius = 6.0f;
@@ -45,7 +69,7 @@ public partial class CombatEncounter : Node3D
     private float _helpCooldownRemaining, _helpNoticeRemaining;
     private string _helpNotice = "";
     public float HelpCooldownRemaining => _helpCooldownRemaining;
-    public bool IsHelpInProgress => _allySpirit?.IsRespondingToHelp == true
+    public bool IsHelpInProgress => _allies.Any(a => IsInstanceValid(a) && a.IsRespondingToHelp)
         || _enemies.Any(e => IsInstanceValid(e) && (e.HasPendingDistraction || e.IsDistracted));
 
     [ExportGroup("Keep Your Distance")]
@@ -172,6 +196,8 @@ public partial class CombatEncounter : Node3D
         }
         _framingTargets = new ActorBase[] { _player }.Concat(_allies).Concat(_enemies).ToArray();
         _gameHud?.SetParticipantRoster(_allies, _enemies);
+        SelectedAlly = _allySpirit;
+        _gameHud?.SetCommandSelection(SelectedAlly);
     }
 
     public override void _ExitTree()
@@ -221,20 +247,20 @@ public partial class CombatEncounter : Node3D
             _distanceNoticeRemaining = Mathf.Max(0, _distanceNoticeRemaining - (float)delta);
             string response = CommandEnemy?.IsDistracted == true ? "Enemy targeting ally"
                 : CommandEnemy?.HasPendingDistraction == true ? "Distraction earned - waiting for attack to finish"
-                : _allySpirit.HelpFeedback;
+                : IsInstanceValid(SelectedAlly) ? SelectedAlly.HelpFeedback : "No spirit selected";
             if (_helpNoticeRemaining > 0) response = _helpNotice;
-            bool allyDown = _allySpirit.IsDefeated;
-            if (allyDown) response = "Ally down - keep moving!";
+            bool allyDown = !IsInstanceValid(SelectedAlly) || SelectedAlly.IsDefeated;
+            if (allyDown) response = "Selected spirit down - R / LB to switch";
             string availability = allyDown ? "Unavailable"
                 : _helpCooldownRemaining > 0 ? $"{Mathf.CeilToInt(_helpCooldownRemaining)}s"
                 : IsHelpInProgress ? "In progress"
-                : _allySpirit.IsKeepingDistance ? "Ally busy" : "Ready";
+                : SelectedAlly.IsKeepingDistance ? "Ally busy" : "Ready";
             string distanceAvailability = allyDown ? "Unavailable"
-                : _allySpirit.IsKeepingDistance ? "In progress"
+                : SelectedAlly.IsKeepingDistance ? "In progress"
                 : _distanceCooldownRemaining > 0 ? $"{Mathf.CeilToInt(_distanceCooldownRemaining)}s"
-                : _allySpirit.IsRespondingToHelp ? "Ally busy" : "Ready";
+                : SelectedAlly.IsRespondingToHelp ? "Ally busy" : "Ready";
             string distanceResponse = allyDown ? ""
-                : _distanceNoticeRemaining > 0 ? _distanceNotice : _allySpirit.DistanceFeedback;
+                : _distanceNoticeRemaining > 0 ? _distanceNotice : SelectedAlly.DistanceFeedback;
             if (_pendingCommand == PlayerCommand.Help) response = "Calling: Help me!";
             if (_pendingCommand == PlayerCommand.Distance) distanceResponse = "Calling: Keep your distance!";
             _gameHud?.SetHelpStatus($"Help me [Q / Y]: {availability}\n{response}\n"
@@ -277,6 +303,12 @@ public partial class CombatEncounter : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (@event.IsActionPressed("select_next_spirit", allowEcho: false))
+        {
+            GetViewport().SetInputAsHandled();
+            TrySelectNextAlly();
+            return;
+        }
         if (@event.IsActionPressed("command_distance", allowEcho: false))
         {
             GetViewport().SetInputAsHandled();
@@ -308,7 +340,7 @@ public partial class CombatEncounter : Node3D
     private bool RequestHelp(bool deliver)
     {
         if (State != EncounterState.Combat || !_player.IsCombatActive || _player.IsDefeated) return false;
-        if (_allySpirit.IsDefeated || !_allySpirit.IsCombatActive)
+        if (!IsInstanceValid(SelectedAlly) || SelectedAlly.IsDefeated || !SelectedAlly.IsCombatActive)
         {
             ShowHelpNotice("Ally unavailable");
             return false;
@@ -318,7 +350,7 @@ public partial class CombatEncounter : Node3D
             ShowHelpNotice("Already helping");
             return false;
         }
-        if (_allySpirit.IsKeepingDistance)
+        if (SelectedAlly.IsKeepingDistance)
         {
             ShowHelpNotice("Ally is keeping distance");
             return false;
@@ -336,7 +368,7 @@ public partial class CombatEncounter : Node3D
             return false;
         }
         if (!deliver) return BeginCommandDelivery(PlayerCommand.Help);
-        if (!_allySpirit.TryAcceptHelp(threat))
+        if (!SelectedAlly.TryAcceptHelp(threat))
         {
             ShowHelpNotice("Ally unavailable");
             return false;
@@ -351,13 +383,13 @@ public partial class CombatEncounter : Node3D
     private bool RequestKeepDistance(bool deliver)
     {
         if (State != EncounterState.Combat || !_player.IsCombatActive || _player.IsDefeated) return false;
-        string rejection = _allySpirit.IsDefeated || !_allySpirit.IsCombatActive ? "Ally unavailable"
-            : _allySpirit.IsKeepingDistance ? "Already keeping distance"
-            : _allySpirit.IsRespondingToHelp ? "Ally is helping"
+        string rejection = !IsInstanceValid(SelectedAlly) || SelectedAlly.IsDefeated || !SelectedAlly.IsCombatActive ? "Ally unavailable"
+            : SelectedAlly.IsKeepingDistance ? "Already keeping distance"
+            : SelectedAlly.IsRespondingToHelp ? "Ally is helping"
             : _distanceCooldownRemaining > 0 ? "Distance command is recharging" : "";
         if (rejection == "" && (!IsInstanceValid(CommandEnemy) || !CommandEnemy.IsCombatActive || CommandEnemy.IsDefeated)) rejection = "No active threat";
         if (rejection == "" && !deliver) return BeginCommandDelivery(PlayerCommand.Distance);
-        if (rejection == "" && !_allySpirit.TryAcceptKeepDistance()) rejection = "No active threat";
+        if (rejection == "" && !SelectedAlly.TryAcceptKeepDistance()) rejection = "No active threat";
         _distanceNotice = rejection == "" ? "Distance requested - ally responding" : rejection;
         _distanceNoticeRemaining = 1.2f;
         if (rejection != "") return false;
@@ -497,7 +529,11 @@ public partial class CombatEncounter : Node3D
         {
             // DamageableActor already stopped the ally and cancelled its help response.
             // The enemy completes its committed attack before reacquiring the player.
-            if (combatant == _allySpirit) ShowHelpNotice("Command ally down - keep moving!");
+            if (combatant == SelectedAlly)
+            {
+                ClearCommandDelivery();
+                ShowHelpNotice("Selected spirit down - R / LB to switch");
+            }
             return;
         }
 
@@ -532,6 +568,8 @@ public partial class CombatEncounter : Node3D
         _player?.ResetForEncounter();
         foreach (var ally in _allies) ally.ResetForEncounter(_enemySpirit);
         foreach (var enemy in _enemies) enemy.ResetForEncounter(_player);
+        SelectedAlly = _allies.FirstOrDefault(a => IsInstanceValid(a) && !a.IsDefeated);
+        _gameHud?.SetCommandSelection(SelectedAlly);
     }
 
     /// <summary>
